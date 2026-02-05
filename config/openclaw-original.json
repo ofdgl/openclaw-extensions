@@ -24,13 +24,12 @@
     },
     "channels": {
         "whatsapp": {
-            "enabled": true,
-            "allowList": {
-                "mode": "strict",
-                "numbers": [
-                    "+905357874261"
-                ]
-            }
+            "dmPolicy": "pairing",
+            "selfChatMode": false,
+            "groupPolicy": "allowlist"
+        },
+        "telegram": {
+            "dmPolicy": "pairing"
         }
     },
     "security": {

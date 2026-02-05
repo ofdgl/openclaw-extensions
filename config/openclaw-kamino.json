@@ -124,11 +124,14 @@
     },
     "channels": {
         "whatsapp": {
+            "dmPolicy": "open",
+            "selfChatMode": false,
+            "groupPolicy": "allowlist",
+            "mediaMaxMb": 50
+        },
+        "telegram": {
             "enabled": true,
-            "allowList": {
-                "mode": "allow-all",
-                "routeUnknown": "demo"
-            }
+            "dmPolicy": "open"
         }
     },
     "security": {
