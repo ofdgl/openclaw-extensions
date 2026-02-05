@@ -79,7 +79,7 @@
     },
     "agents": {
         "defaults": {
-            "model": "claude-3-5-haiku",
+            "model": "claude-sonnet-4-20250514",
             "workspace": "~/.openclaw-kamino/workspace"
         },
         "entries": {
@@ -91,7 +91,7 @@
             },
             "security": {
                 "workspace": "~/.openclaw-kamino/workspaces/security",
-                "model": "claude-3-5-haiku",
+                "model": "claude-sonnet-4-20250514",
                 "soul": "~/.openclaw-kamino/souls/security.md",
                 "tools": [
                     "read_file",
@@ -102,7 +102,7 @@
             },
             "demo": {
                 "workspace": "~/.openclaw-kamino/workspaces/demo",
-                "model": "claude-3-5-haiku",
+                "model": "claude-sonnet-4-20250514",
                 "soul": "~/.openclaw-kamino/souls/demo.md",
                 "tools": [
                     "read_file",
@@ -113,7 +113,7 @@
             },
             "intern": {
                 "workspace": "~/.openclaw-kamino/workspaces/intern",
-                "model": "claude-3-5-haiku",
+                "model": "claude-sonnet-4-20250514",
                 "soul": "~/.openclaw-kamino/souls/intern.md",
                 "tools": [
                     "read_file"
