@@ -3,7 +3,8 @@
     "gateway": {
         "port": 18789,
         "auth": {
-            "token": "${OPENCLAW_GATEWAY_TOKEN}"
+            "token": "${OPENCLAW_GATEWAY_TOKEN}",
+            "allowInsecureAuth": false
         },
         "reload": {
             "mode": "hybrid"

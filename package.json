@@ -1,7 +1,7 @@
 {
     "name": "@kowalski/openclaw-extensions",
-    "version": "1.1.0",
-    "description": "Complete OpenClaw hooks collection: 20 production-ready hooks + VPS mode switching",
+    "version": "1.2.0",
+    "description": "Complete OpenClaw hooks collection: 21 production hooks + multi-agent + VPS mode switching + Mission Control architecture",
     "openclaw": {
         "hooks": [
             "./hooks/router-guard",
@@ -22,7 +22,8 @@
             "./hooks/error-memory",
             "./hooks/task-lock-manager",
             "./hooks/contact-enricher",
-            "./hooks/vps-mode-switch"
+            "./hooks/vps-mode-switch",
+            "./hooks/daily-standup"
         ]
     },
     "author": "Kowalski",
