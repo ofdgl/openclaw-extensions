@@ -1,126 +1,56 @@
-# VPS Mode Switch - Deployment Guide
+# VPS Mode Switch
 
-## Mimari
+Switch between Original and Kamino modes on your OpenClaw VPS.
 
-```
-VPS Structure:
-├── ~/.openclaw-original/     [Original Mode]
-│   ├── openclaw.json         (strict-list, admin only)
-│   └── workspace/
-│
-├── ~/.openclaw-kamino/       [Kamino Mode]
-│   ├── openclaw.json         (allow-all + sandbox)
-│   ├── hooks/                (20 custom hooks)
-│   ├── souls/                (4 agent personalities)
-│   └── workspaces/
-│       ├── admin/
-│       ├── security/
-│       ├── demo/
-│       └── intern/
-│
-├── ~/.openclaw-active -> symlink to active mode
-├── ~/.openclaw-mode          (persistence file: "original" or "kamino")
-└── openclaw-switch.sh        (mode switch script)
-```
+## Quick Commands
 
-## Komutlar
-
-| Komut | Açıklama |
-|-------|----------|
-| `/vps original` | Orijinal moda dön (strict admin-only) |
-| `/vps kamino` | Gelişmiş moda geç (20 hook, 4 agent) |
-| `/vps status` | Aktif modu göster |
-
-## Mode Farkları
-
-| Özellik | Original | Kamino |
-|---------|----------|--------|
-| **Mesaj İzni** | Sadece admin | Tüm +90 (sandbox) |
-| **Hooks** | Bundled | 20 custom hook |
-| **Agents** | 1 (admin) | 4 (admin/security/demo/intern) |
-| **Rate Limit** | Yok | Evet (token/gün) |
-| **Security Logs** | Yok | Evet |
-| **Model Handoff** | Yok | Haiku→Sonnet→Opus |
-
-## VPS Kurulum Adımları
-
-### 1. Dizin Yapısını Oluştur
 ```bash
-# Original mode (mevcut backup'tan)
-cp -r ~/.openclaw ~/.openclaw-original
+# Check current mode
+~/openclaw-extensions/scripts/mode-switch.sh status
 
-# Kamino mode (yeni)
-mkdir -p ~/.openclaw-kamino/{hooks,souls,workspaces/{admin,security,demo,intern}}
+# Switch to Original (maximum security)
+~/openclaw-extensions/scripts/mode-switch.sh original
+
+# Switch to Kamino (custom hooks)
+~/openclaw-extensions/scripts/mode-switch.sh kamino
 ```
 
-### 2. Dosyaları Kopyala
+## Security Differences
+
+| Aspect | Original | Kamino |
+|--------|----------|--------|
+| **dmPolicy** | `pairing` | `open` |
+| **allowFrom** | Admin only | `*` (hooks filter) |
+| **Custom Hooks** | Disabled | Enabled |
+| **Who Can Message** | Paired users only | Anyone (+90 filtered by hook) |
+| **Guest Sandbox** | N/A | Yes (unknowns get limited access) |
+
+## What The Script Does
+
+### Switch to Original:
+1. Sets `dmPolicy: "pairing"` (only paired users)
+2. Sets `allowFrom` to admin phone only
+3. Removes `boot.md` (agent won't know about extensions)
+4. Disables custom hooks
+5. Restarts gateway
+
+### Switch to Kamino:
+1. Sets `dmPolicy: "open"` (everyone can message)
+2. Sets `allowFrom: ["*"]` (hooks handle filtering)
+3. Creates `boot.md` (agent knows about extensions)
+4. Enables router-guard hook (filters +90, sandboxes unknowns)
+5. Restarts gateway
+
+## Manual Override
+
+If script fails, manually set:
+
 ```bash
-# GitHub'dan clone et
-cd ~/.openclaw-kamino
-git clone https://github.com/kowalski/openclaw-extensions.git temp
-mv temp/hooks/* hooks/
-mv temp/souls/* souls/
-mv temp/config/openclaw-kamino.json openclaw.json
-rm -rf temp
+# For Original mode
+jq '.channels.whatsapp.dmPolicy = "pairing"' ~/.openclaw/openclaw.json > /tmp/oc.json && mv /tmp/oc.json ~/.openclaw/openclaw.json
+echo '{"version":1,"allowFrom":["+905357874261"]}' > ~/.openclaw/credentials/whatsapp-allowFrom.json
+
+# For Kamino mode
+jq '.channels.whatsapp.dmPolicy = "open"' ~/.openclaw/openclaw.json > /tmp/oc.json && mv /tmp/oc.json ~/.openclaw/openclaw.json
+echo '{"version":1,"allowFrom":["*"]}' > ~/.openclaw/credentials/whatsapp-allowFrom.json
 ```
-
-### 3. Switch Script'i Kur
-```bash
-cp openclaw-switch.sh ~/
-chmod +x ~/openclaw-switch.sh
-```
-
-### 4. Systemd Service (Boot Persistence)
-```bash
-sudo cp openclaw-mode.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable openclaw-mode.service
-```
-
-### 5. Default Mode Ayarla
-```bash
-echo "kamino" > ~/.openclaw-mode
-```
-
-## Docker Entegrasyonu
-
-Docker container `~/.openclaw-active` symlink'ini mount eder:
-
-```yaml
-# docker-compose.yml
-services:
-  openclaw:
-    volumes:
-      - ~/.openclaw-active:/home/kowalski/.openclaw:ro
-      - ~/.openclaw-mode:/home/kowalski/.openclaw-mode:ro
-```
-
-## Rollback Senaryoları
-
-### Senaryo 1: Kamino'da Bug
-```bash
-# WhatsApp'tan:
-/vps original
-
-# Veya SSH ile:
-~/openclaw-switch.sh original
-```
-
-### Senaryo 2: VPS Restart
-Systemd service otomatik olarak son modu restore eder.
-
-### Senaryo 3: Acil Durum
-```bash
-# SSH ile doğrudan:
-docker stop openclaw
-rm ~/.openclaw-active
-ln -s ~/.openclaw-original ~/.openclaw-active
-docker start openclaw
-```
-
-## Güvenlik Notları
-
-1. **Admin Check**: `/vps` komutu sadece +905357874261 tarafından kullanılabilir
-2. **Logging**: Her mode switch `security.jsonl`'e loglanır
-3. **Original Mode**: Strict-list, sadece bilinen numaralar erişebilir
-4. **Kamino Mode**: Allow-all ama sandbox (kısıtlı yetkiler)
