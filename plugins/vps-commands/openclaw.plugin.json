@@ -1,0 +1,7 @@
+{
+    "id": "vps-commands",
+    "name": "VPS Commands",
+    "version": "1.0.0",
+    "description": "VPS mode switching commands (Original ↔ Kamino)",
+    "entry": "./index.js"
+}
