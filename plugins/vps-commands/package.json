@@ -5,7 +5,7 @@
     "main": "index.js",
     "type": "module",
     "openclaw": {
-        "plugin": true
+        "extension": "./index.js"
     },
     "author": "ofdgl",
     "license": "MIT"
