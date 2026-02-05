@@ -30,8 +30,20 @@ Thumbs.db
 # Environment
 .env
 .env.local
+.env.*
 
-# Sensitive
+# Sensitive - files
 creds/
+credentials/
 *.pem
 *.key
+*.secret
+*-secrets.json
+allowFrom.json
+
+# Sensitive - patterns (failsafe)
+# Never commit files containing:
+# - Phone numbers (+90...)
+# - Telegram bot tokens (AAG...)
+# - API keys (sk-ant-, sk-...)
+# - VPS passwords
