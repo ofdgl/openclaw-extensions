@@ -1,0 +1,85 @@
+# Routing Configuration
+# Loaded by router-guard hook at startup
+# Hot-reload: File changes are detected automatically
+
+# Default agent for unmatched contacts
+default_agent: admin
+
+# Contact-based routing rules
+routes:
+  # Admin gets routed to admin agent
+  - match:
+      category: admin
+    agent: admin
+    priority: 100
+    
+  # Trusted users get security agent
+  - match:
+      category: trusted
+    agent: security
+    priority: 90
+    
+  # Blocked users get rejected
+  - match:
+      category: blocked
+    action: reject
+    message: "Bu numara engellenmiştir."
+    priority: 100
+    
+  # Unknown TR numbers get demo agent (sandbox)
+  - match:
+      phone_prefix: "+90"
+      category: unknown
+    agent: demo
+    sandbox: true
+    priority: 50
+    
+  # All other unknown numbers get intern agent
+  - match:
+      category: unknown
+    agent: intern
+    sandbox: true
+    priority: 10
+
+# Agent configurations
+agents:
+  admin:
+    model: claude-sonnet-4-20250514
+    tools: all
+    rate_limit: none
+    
+  security:
+    model: claude-3-5-haiku
+    tools: 
+      - read_file
+      - list_dir
+      - grep_search
+      - run_command
+    rate_limit: 100000  # tokens/day
+    
+  demo:
+    model: claude-3-5-haiku
+    tools:
+      - read_file
+      - list_dir
+      - grep_search
+    rate_limit: 50000
+    sandbox: true
+    
+  intern:
+    model: claude-3-5-haiku
+    tools:
+      - read_file
+    rate_limit: 20000
+    sandbox: true
+
+# Sandbox restrictions
+sandbox:
+  blocked_tools:
+    - run_command
+    - write_to_file
+    - delete_file
+  blocked_paths:
+    - ~/.ssh
+    - ~/.openclaw/creds
+    - /etc

@@ -1,0 +1,33 @@
+{
+    "name": "@kowalski/openclaw-extensions",
+    "version": "1.1.0",
+    "description": "Complete OpenClaw hooks collection: 20 production-ready hooks + VPS mode switching",
+    "openclaw": {
+        "hooks": [
+            "./hooks/router-guard",
+            "./hooks/billing-tracker",
+            "./hooks/secret-guard",
+            "./hooks/intent-classifier",
+            "./hooks/loop-detector",
+            "./hooks/rate-limiter",
+            "./hooks/emergency-bypass",
+            "./hooks/handoff-manager",
+            "./hooks/context-optimizer",
+            "./hooks/image-processor",
+            "./hooks/heartbeat-scheduler",
+            "./hooks/mention-notifier",
+            "./hooks/security-reporter",
+            "./hooks/backup-automator",
+            "./hooks/model-fallback",
+            "./hooks/error-memory",
+            "./hooks/task-lock-manager",
+            "./hooks/contact-enricher",
+            "./hooks/vps-mode-switch"
+        ]
+    },
+    "author": "Kowalski",
+    "license": "MIT",
+    "devDependencies": {
+        "@types/node": "^25.2.0"
+    }
+}

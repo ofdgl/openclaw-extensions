@@ -1,0 +1,28 @@
+# Contact Directory
+# Used by router-guard, rate-limiter, emergency-bypass hooks
+
+# Admin users - full access, can use /o command
+admins:
+  - "+905357874261"  # Ömer - Primary admin
+
+# Trusted users - elevated access, higher rate limits
+trusted:
+  - "+905551234567"  # Example trusted user
+
+# Blocked users - completely rejected
+blocked:
+  - "+901234567890"  # Spam number
+
+# Rate limit overrides (tokens per day)
+rate_limits:
+  "+905357874261": unlimited
+  "+905551234567": 200000
+  default: 50000
+
+# Contact metadata (auto-enriched by contact-enricher hook)
+# Format: phone -> { name, category, last_seen, message_count }
+metadata:
+  "+905357874261":
+    name: "Ömer"
+    category: admin
+    created_at: 2025-01-01

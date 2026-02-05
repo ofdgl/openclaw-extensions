@@ -1,0 +1,129 @@
+{
+    "$schema": "https://openclaw.ai/schema/config.json",
+    "gateway": {
+        "port": 18789,
+        "auth": {
+            "token": "${OPENCLAW_GATEWAY_TOKEN}"
+        },
+        "reload": {
+            "mode": "hybrid"
+        }
+    },
+    "hooks": {
+        "internal": {
+            "enabled": true,
+            "load": {
+                "extraDirs": []
+            },
+            "entries": {
+                "router-guard": {
+                    "enabled": true
+                },
+                "billing-tracker": {
+                    "enabled": true
+                },
+                "secret-guard": {
+                    "enabled": true
+                },
+                "intent-classifier": {
+                    "enabled": true
+                },
+                "loop-detector": {
+                    "enabled": true
+                },
+                "rate-limiter": {
+                    "enabled": true
+                },
+                "emergency-bypass": {
+                    "enabled": true
+                },
+                "handoff-manager": {
+                    "enabled": true
+                },
+                "context-optimizer": {
+                    "enabled": true
+                },
+                "image-processor": {
+                    "enabled": true
+                },
+                "heartbeat-scheduler": {
+                    "enabled": true
+                },
+                "mention-notifier": {
+                    "enabled": true
+                },
+                "security-reporter": {
+                    "enabled": true
+                },
+                "backup-automator": {
+                    "enabled": true
+                },
+                "model-fallback": {
+                    "enabled": true
+                },
+                "error-memory": {
+                    "enabled": true
+                },
+                "task-lock-manager": {
+                    "enabled": true
+                },
+                "contact-enricher": {
+                    "enabled": true
+                }
+            }
+        }
+    },
+    "agents": {
+        "defaults": {
+            "model": "claude-3-5-haiku",
+            "workspace": "~/.openclaw/workspace"
+        },
+        "entries": {
+            "admin": {
+                "workspace": "~/.openclaw/workspaces/admin",
+                "model": "claude-sonnet-4-20250514",
+                "soul": "~/.openclaw/souls/admin.md",
+                "tools": "all"
+            },
+            "security": {
+                "workspace": "~/.openclaw/workspaces/security",
+                "model": "claude-3-5-haiku",
+                "soul": "~/.openclaw/souls/security.md",
+                "tools": [
+                    "read_file",
+                    "list_dir",
+                    "grep_search",
+                    "run_command"
+                ]
+            },
+            "demo": {
+                "workspace": "~/.openclaw/workspaces/demo",
+                "model": "claude-3-5-haiku",
+                "soul": "~/.openclaw/souls/demo.md",
+                "tools": [
+                    "read_file",
+                    "list_dir",
+                    "grep_search"
+                ],
+                "sandbox": true
+            },
+            "intern": {
+                "workspace": "~/.openclaw/workspaces/intern",
+                "model": "claude-3-5-haiku",
+                "soul": "~/.openclaw/souls/intern.md",
+                "tools": [
+                    "read_file"
+                ],
+                "sandbox": true
+            }
+        }
+    },
+    "channels": {
+        "whatsapp": {
+            "enabled": true
+        },
+        "telegram": {
+            "enabled": false
+        }
+    }
+}

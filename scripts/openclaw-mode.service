@@ -1,0 +1,13 @@
+[Unit]
+Description=OpenClaw Mode Restore on Boot
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/kowalski/openclaw-switch.sh startup
+RemainAfterExit=yes
+User=kowalski
+
+[Install]
+WantedBy=multi-user.target

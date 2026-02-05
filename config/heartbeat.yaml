@@ -1,0 +1,63 @@
+# Heartbeat Scheduler Configuration
+# Automated tasks executed by heartbeat-scheduler hook
+
+# Global settings
+settings:
+  timezone: Europe/Istanbul
+  active_hours:
+    start: "08:00"
+    end: "23:00"
+  night_mode: skip  # skip | allow | queue
+
+# Scheduled tasks
+tasks:
+  # GitHub backup every 6 hours
+  - name: github_backup
+    schedule: "0 */6 * * *"  # Every 6 hours
+    handler: command
+    command: "cd ~/.openclaw && git add . && git commit -m 'Auto backup' && git push"
+    night_mode: allow
+    
+  # Security report daily at 09:00
+  - name: security_report
+    schedule: "0 9 * * *"  # Daily at 09:00
+    handler: ai
+    prompt: |
+      Güvenlik raporunu oluştur:
+      1. Son 24 saatteki güvenlik olaylarını özetle
+      2. Token kullanımı istatistiklerini göster
+      3. Kritik uyarıları listele
+    agent: security
+    
+  # Memory cleanup weekly on Sunday
+  - name: memory_cleanup
+    schedule: "0 3 * * 0"  # Sunday at 03:00
+    handler: command
+    command: "find ~/.openclaw/workspace/memory -name '*.tmp' -mtime +7 -delete"
+    night_mode: allow
+    
+  # Health check every 15 minutes
+  - name: health_check
+    schedule: "*/15 * * * *"
+    handler: command
+    command: "openclaw health --json > ~/.openclaw/logs/health-$(date +%H%M).json"
+    night_mode: allow
+    
+  # Pending notifications check every 5 minutes
+  - name: check_notifications
+    schedule: "*/5 * * * *"
+    handler: ai
+    prompt: "Bekleyen bildirimleri kontrol et ve ilet."
+    agent: admin
+    
+  # Daily summary at 22:00
+  - name: daily_summary
+    schedule: "0 22 * * *"
+    handler: ai
+    prompt: |
+      Günlük özet raporu:
+      - Bugün yapılan işler
+      - Bekleyen görevler
+      - Yarın için hatırlatmalar
+    agent: admin
+    notify: "+905357874261"

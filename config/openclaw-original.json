@@ -1,0 +1,38 @@
+{
+    "$schema": "https://openclaw.ai/schema/config.json",
+    "gateway": {
+        "port": 18789,
+        "auth": {
+            "token": "${OPENCLAW_GATEWAY_TOKEN}"
+        },
+        "reload": {
+            "mode": "hybrid"
+        }
+    },
+    "hooks": {
+        "internal": {
+            "enabled": true,
+            "entries": {}
+        }
+    },
+    "agents": {
+        "defaults": {
+            "model": "claude-sonnet-4-20250514",
+            "workspace": "~/.openclaw-original/workspace"
+        }
+    },
+    "channels": {
+        "whatsapp": {
+            "enabled": true,
+            "allowList": {
+                "mode": "strict",
+                "numbers": [
+                    "+905357874261"
+                ]
+            }
+        }
+    },
+    "security": {
+        "strictMode": true
+    }
+}
