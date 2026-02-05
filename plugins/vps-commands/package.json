@@ -1,0 +1,12 @@
+{
+    "name": "vps-commands",
+    "version": "1.0.0",
+    "description": "VPS mode switching commands (Original ↔ Kamino)",
+    "main": "index.js",
+    "type": "module",
+    "openclaw": {
+        "plugin": true
+    },
+    "author": "ofdgl",
+    "license": "MIT"
+}
