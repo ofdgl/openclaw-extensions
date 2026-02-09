@@ -198,7 +198,7 @@ handle_toolkit() {
     [ $(check_tool pandoc && echo 1) ] && echo "    ✓ pandoc kurulu" || echo "    ○ pandoc kurulu değil"
     [ $(check_tool ffmpeg && echo 1) ] && echo "    ✓ ffmpeg kurulu" || echo "    ○ ffmpeg kurulu değil"
     [ $(docker ps -q -f name=searxng 2>/dev/null | grep -q . && echo 1) ] && echo "    ✓ SearXNG çalışıyor" || echo "    ○ SearXNG kurulu değil"
-    [ $(pip3 show playwright &>/dev/null && echo 1) ] && echo "    ✓ Playwright kurulu" || echo "    ○ Playwright kurulu değil"
+    [ $(npx playwright --version &>/dev/null && echo 1) ] && echo "    ✓ Playwright kurulu" || echo "    ○ Playwright kurulu değil"
     
     echo ""
     echo "  Toolkit modülleri:"
