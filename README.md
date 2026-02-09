@@ -10,15 +10,15 @@ Enterprise-grade AI orchestration system built on OpenClaw, featuring intelligen
 
 ```bash
 # Clone repository
-git clone https://github.com/kowalski/openclaw-extensions.git
+git clone https://github.com/ofdgl/openclaw-extensions.git
 cd openclaw-extensions
 
-# Install to OpenClaw
+# Option 1: Interactive wizard (recommended)
+./wizard.sh
+
+# Option 2: Manual install
 npm install
 cp -r hooks/* ~/.openclaw/hooks/
-cp config/openclaw-kamino.json ~/.openclaw/openclaw.json
-
-# Enable hooks
 openclaw gateway restart
 ```
 
@@ -59,6 +59,7 @@ openclaw gateway restart
 
 - [**Architecture**](docs/ARCHITECTURE.md) - System design & data flow
 - [**Hooks Reference**](docs/HOOKS-REFERENCE.md) - All 20 hooks explained
+- [**Wizard Guide**](docs/WIZARD-GUIDE.md) - Setup wizard & toolkit
 - [**Deployment Guide**](docs/DEPLOYMENT-GUIDE.md) - VPS setup & testing
 - [**Config Reference**](docs/CONFIG-REFERENCE.md) - YAML/JSON configuration
 - [**Multi-Agent Guide**](docs/MULTI-AGENT-GUIDE.md) - 4-agent system
@@ -102,7 +103,7 @@ Hooks:         20/20 ✅
 Config:        6 files
 SOUL:          4 agents
 Tests:         53/54 (98%)
-Version:       1.1.0
+Version:       1.2.0
 License:       MIT
 ```
 
@@ -141,3 +142,13 @@ MIT License - See LICENSE file
 ## 🙏 Acknowledgments
 
 Built on [OpenClaw](https://github.com/openclaw/openclaw) - The open-source AI assistant framework.
+
+---
+
+## 📋 Changelog
+
+| Version | Date | Changes |
+|---------|------|---------|
+| **1.2.0** | 2026-02-09 | Unified setup wizard, toolkit modules (SearXNG, Playwright, devtools, converters), enhanced mode switching |
+| **1.1.0** | 2026-02-05 | VPS mode switching, contact-based routing, security enhancements |
+| **1.0.0** | 2026-02-01 | Initial release: 20 hooks, 4 agents, multi-agent coordination |

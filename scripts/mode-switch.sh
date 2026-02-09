@@ -9,7 +9,14 @@ MODE_FILE="$HOME/.openclaw-mode"
 CONFIG_DIR="$HOME/openclaw-extensions/config"
 OPENCLAW_CONFIG="$HOME/.openclaw/openclaw.json"
 WA_ALLOWFROM="$HOME/.openclaw/credentials/whatsapp-allowFrom.json"
-ADMIN_PHONE="+905357874261"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Dynamic admin phone (from wizard or fallback)
+if [ -f "$HOME/.openclaw-admin-phone" ]; then
+    ADMIN_PHONE=$(cat "$HOME/.openclaw-admin-phone")
+else
+    ADMIN_PHONE=""
+fi
 
 show_status() {
     echo "=== OpenClaw Mode Status ==="
@@ -43,8 +50,10 @@ switch_to_original() {
         mv /tmp/oc.json "$OPENCLAW_CONFIG"
     fi
     
-    # 3. Restrict allowFrom to admin only
-    echo "{\"version\":1,\"allowFrom\":[\"$ADMIN_PHONE\"]}" > "$WA_ALLOWFROM"
+    # 3. Restrict allowFrom to admin only (if configured)
+    if [ -n "$ADMIN_PHONE" ]; then
+        echo "{\"version\":1,\"allowFrom\":[\"$ADMIN_PHONE\"]}" > "$WA_ALLOWFROM"
+    fi
     
     # 4. Remove boot.md (Kamino indicator)
     rm -f "$HOME/.openclaw/boot.md"
@@ -55,7 +64,10 @@ switch_to_original() {
         mv /tmp/oc.json "$OPENCLAW_CONFIG"
     fi
     
-    # 6. Restart gateway
+    # 6. Inject mode context to SOUL.md
+    "$SCRIPT_DIR/inject-context.sh" 2>/dev/null || true
+    
+    # 7. Restart gateway
     openclaw gateway restart
     
     echo "✅ Switched to ORIGINAL mode"
@@ -96,7 +108,10 @@ EOF
         mv /tmp/oc.json "$OPENCLAW_CONFIG"
     fi
     
-    # 6. Restart gateway
+    # 6. Inject mode context to SOUL.md
+    "$SCRIPT_DIR/inject-context.sh" 2>/dev/null || true
+    
+    # 7. Restart gateway
     openclaw gateway restart
     
     echo "✅ Switched to KAMINO mode"
