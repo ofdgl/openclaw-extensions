@@ -18,13 +18,9 @@ export type Page = 'dashboard' | 'cost' | 'tokens' | 'terminal' | 'settings' | '
 
 function App() {
   const [activePage, setActivePage] = useState<Page>('dashboard')
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
 
   const handleNavigate = (page: Page, sessionId?: string) => {
     setActivePage(page)
-    if (sessionId) {
-      setSelectedSessionId(sessionId)
-    }
   }
 
   const renderPage = () => {
