@@ -9,6 +9,8 @@ import { hooksRoutes } from './routes/hooks'
 import { contactsRoutes } from './routes/contacts'
 import { memoryRoutes } from './routes/memory'
 import { cronRoutes } from './routes/cron'
+import { terminalRoutes } from './routes/terminal'
+import { logviewerRoutes } from './routes/logviewer'
 
 const app = new Hono()
 
@@ -43,5 +45,7 @@ app.route('/api/hooks', hooksRoutes)
 app.route('/api/contacts', contactsRoutes)
 app.route('/api/memory', memoryRoutes)
 app.route('/api/cron', cronRoutes)
+app.route('/api/terminal', terminalRoutes)
+app.route('/api/logviewer', logviewerRoutes)
 
 export default app

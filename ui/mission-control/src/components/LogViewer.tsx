@@ -1,42 +1,85 @@
-import { /* Filter, */ Download, AlertCircle } from 'lucide-react'
-import { useState } from 'react'
+import { Download, AlertCircle, RefreshCw } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { API_BASE_URL, API_KEY } from '../config/api'
 
-const logSources = ['gateway', 'security', 'hooks', 'agent-errors']
 const logLevels = ['all', 'info', 'warn', 'error']
 
-const logs = [
-    { time: '18:30:45', source: 'gateway', level: 'info', message: 'Message received from +905357874261' },
-    { time: '18:30:44', source: 'hooks', level: 'info', message: '[router-guard] Routed to main-agent' },
-    { time: '18:30:43', source: 'hooks', level: 'info', message: '[billing-tracker] Logged 1250 input + 890 output tokens' },
-    { time: '18:25:11', source: 'security', level: 'warn', message: '[secret-guard] Redacted API key from response' },
-    { time: '18:20:33', source: 'gateway', level: 'info', message: 'Session started: main-agent' },
-    { time: '18:15:22', source: 'hooks', level: 'info', message: '[router-guard] Routed to guest-agent' },
-    { time: '18:10:11', source: 'hooks', level: 'warn', message: '[loop-detector] Loop iteration 2/3 detected' },
-    { time: '18:05:00', source: 'security', level: 'error', message: '[fail2ban] Blocked IP 192.168.1.100 after 5 failed attempts' },
-    { time: '17:55:18', source: 'agent-errors', level: 'error', message: 'Coder agent: Module not found error' },
-    { time: '17:50:33', source: 'gateway', level: 'info', message: 'Heartbeat check passed' },
-]
+interface LogEntry {
+    time: string
+    source: string
+    level: string
+    message: string
+}
 
 export default function LogViewer() {
-    const [sourceFilter, setSourceFilter] = useState<string>('all')
-    const [levelFilter, setLevelFilter] = useState<string>('all')
+    const [logFiles, setLogFiles] = useState<string[]>([])
+    const [selectedFile, setSelectedFile] = useState('gateway.log')
+    const [logs, setLogs] = useState<LogEntry[]>([])
+    const [levelFilter, setLevelFilter] = useState('all')
     const [searchQuery, setSearchQuery] = useState('')
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        fetchLogFiles()
+    }, [])
+
+    useEffect(() => {
+        if (selectedFile) {
+            fetchLogs()
+        }
+    }, [selectedFile])
+
+    const fetchLogFiles = async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/logviewer/files?key=${API_KEY}`)
+            if (res.ok) {
+                const data = await res.json()
+                setLogFiles(data.files || ['gateway.log'])
+            }
+        } catch (e) {
+            console.error('Failed to fetch log files:', e)
+        }
+    }
+
+    const fetchLogs = async () => {
+        setLoading(true)
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/logviewer/tail?key=${API_KEY}&file=${selectedFile}&lines=100`)
+            if (res.ok) {
+                const data = await res.json()
+                setLogs(data.entries || [])
+            }
+        } catch (e) {
+            console.error('Failed to fetch logs:', e)
+            setLogs([])
+        } finally {
+            setLoading(false)
+        }
+    }
 
     const filtered = logs.filter(log => {
-        const matchesSource = sourceFilter === 'all' || log.source === sourceFilter
         const matchesLevel = levelFilter === 'all' || log.level === levelFilter
         const matchesSearch = log.message.toLowerCase().includes(searchQuery.toLowerCase())
-        return matchesSource && matchesLevel && matchesSearch
+        return matchesLevel && matchesSearch
     })
 
     return (
         <div className="p-6 h-full flex flex-col gap-6">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-white">Log Viewer</h1>
-                <button className="flex items-center gap-2 px-3 py-2 bg-kamino-700 rounded-lg text-sm text-gray-300 hover:bg-kamino-600">
-                    <Download size={16} />
-                    Export Logs
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={fetchLogs}
+                        className="flex items-center gap-2 px-3 py-2 bg-kamino-700 rounded-lg text-sm text-gray-300 hover:bg-kamino-600"
+                    >
+                        <RefreshCw size={16} />
+                        Refresh
+                    </button>
+                    <button className="flex items-center gap-2 px-3 py-2 bg-kamino-700 rounded-lg text-sm text-gray-300 hover:bg-kamino-600">
+                        <Download size={16} />
+                        Export
+                    </button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -51,13 +94,12 @@ export default function LogViewer() {
                     />
                 </div>
                 <select
-                    value={sourceFilter}
-                    onChange={(e) => setSourceFilter(e.target.value)}
+                    value={selectedFile}
+                    onChange={(e) => setSelectedFile(e.target.value)}
                     className="px-4 py-2 bg-kamino-800 border border-kamino-700 rounded-lg text-white focus:outline-none focus:border-kamino-accent"
                 >
-                    <option value="all">All Sources</option>
-                    {logSources.map(s => (
-                        <option key={s} value={s}>{s}</option>
+                    {logFiles.map(file => (
+                        <option key={file} value={file}>{file}</option>
                     ))}
                 </select>
                 <select
@@ -65,65 +107,47 @@ export default function LogViewer() {
                     onChange={(e) => setLevelFilter(e.target.value)}
                     className="px-4 py-2 bg-kamino-800 border border-kamino-700 rounded-lg text-white focus:outline-none focus:border-kamino-accent"
                 >
-                    <option value="all">All Levels</option>
-                    {logLevels.filter(l => l !== 'all').map(l => (
-                        <option key={l} value={l}>{l}</option>
+                    {logLevels.map(level => (
+                        <option key={level} value={level}>{level.toUpperCase()}</option>
                     ))}
                 </select>
             </div>
 
-            {/* Log Stream */}
-            <div className="flex-1 bg-black rounded-lg border border-kamino-700 overflow-hidden flex flex-col">
-                <div className="flex items-center gap-2 px-4 py-2 bg-kamino-800 border-b border-kamino-700">
-                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                    <span className="text-xs text-gray-400">Live Stream</span>
-                    <span className="text-xs text-gray-600 ml-auto">{filtered.length} entries</span>
-                </div>
-                <div className="flex-1 overflow-auto font-mono text-xs p-4 space-y-1">
-                    {filtered.map((log, i) => {
-                        const levelColor = {
-                            info: 'text-gray-400',
-                            warn: 'text-yellow-400',
-                            error: 'text-red-400',
-                        }[log.level] || 'text-gray-400'
-
-                        const sourceColor = {
-                            gateway: 'text-blue-400',
-                            security: 'text-red-400',
-                            hooks: 'text-purple-400',
-                            'agent-errors': 'text-orange-400',
-                        }[log.source] || 'text-gray-400'
-
-                        return (
-                            <div key={i} className="flex gap-3">
-                                <span className="text-gray-600 shrink-0">{log.time}</span>
-                                <span className={`${sourceColor} w-24 shrink-0`}>{log.source}</span>
-                                <span className={`${levelColor} w-12 shrink-0 uppercase`}>{log.level}</span>
-                                <span className="text-green-400">{log.message}</span>
+            {/* Logs */}
+            <div className=" flex-1 bg-kamino-800 rounded-lg border border-kamino-700 overflow-auto">
+                {loading ? (
+                    <div className="p-8 text-center text-gray-500">Loading logs...</div>
+                ) : filtered.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">No logs found</div>
+                ) : (
+                    <div className="divide-y divide-kamino-700">
+                        {filtered.map((log, idx) => (
+                            <div key={idx} className="p-3 hover:bg-kamino-700/50 transition-colors">
+                                <div className="flex items-start gap-3">
+                                    <span className="text-xs text-gray-500 font-mono w-20 flex-shrink-0">
+                                        {log.time}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium
+                                                ${log.level === 'error' ? 'bg-red-500/20 text-red-400' :
+                                                    log.level === 'warn' ? 'bg-yellow-500/20 text-yellow-400' :
+                                                        'bg-green-500/20 text-green-400'}`}
+                                            >
+                                                {log.level.toUpperCase()}
+                                            </span>
+                                            <span className="text-xs text-gray-500">{log.source}</span>
+                                        </div>
+                                        <p className="text-sm text-gray-300 break-words">{log.message}</p>
+                                    </div>
+                                    {log.level === 'error' && (
+                                        <AlertCircle size={16} className="text-red-400 flex-shrink-0" />
+                                    )}
+                                </div>
                             </div>
-                        )
-                    })}
-                </div>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-4 gap-3">
-                <div className="bg-kamino-800 rounded-lg p-3 border border-kamino-700">
-                    <div className="text-xs text-gray-500">Info</div>
-                    <div className="text-xl font-bold text-gray-400">{logs.filter(l => l.level === 'info').length}</div>
-                </div>
-                <div className="bg-kamino-800 rounded-lg p-3 border border-kamino-700">
-                    <div className="text-xs text-gray-500">Warnings</div>
-                    <div className="text-xl font-bold text-yellow-400">{logs.filter(l => l.level === 'warn').length}</div>
-                </div>
-                <div className="bg-kamino-800 rounded-lg p-3 border border-kamino-700">
-                    <div className="text-xs text-gray-500">Errors</div>
-                    <div className="text-xl font-bold text-red-400">{logs.filter(l => l.level === 'error').length}</div>
-                </div>
-                <div className="bg-kamino-800 rounded-lg p-3 border border-kamino-700 flex items-center justify-center">
-                    <AlertCircle size={16} className="text-gray-600 mr-2" />
-                    <span className="text-xs text-gray-500">Real-time monitoring</span>
-                </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     )
