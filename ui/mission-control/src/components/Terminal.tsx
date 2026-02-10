@@ -62,7 +62,12 @@ export default function Terminal() {
                 const lines = data.output.split('\n')
                 setOutput(prev => [...prev, ...lines, ''])
             } else {
-                setOutput(prev => [...prev, `Error: ${data.error || data.output}`, ''])
+                const errorMsg = data.error || data.output || 'Unknown error'
+                if (errorMsg.includes('not allowed') || errorMsg.includes('whitelist')) {
+                    setOutput(prev => [...prev, '❌ WHITELIST ERROR:', errorMsg, '', '💡 Tip: Click "Show Whitelist" to see allowed commands', ''])
+                } else {
+                    setOutput(prev => [...prev, `❌ Error: ${errorMsg}`, ''])
+                }
             }
         } catch (e: any) {
             setOutput(prev => [...prev, `Error: ${e.message}`, ''])
@@ -81,7 +86,15 @@ export default function Terminal() {
 
     return (
         <div className="p-6 h-full flex flex-col gap-4">
-            <h1 className="text-2xl font-bold text-white">Terminal</h1>
+            <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-bold text-white">Terminal</h1>
+                <button
+                    onClick={() => setOutput(prev => [...prev, '', '=== WHITELISTED COMMANDS ===', ...fastCommands.map(fc => `✓ ${fc.command}`), '===========================', ''])}
+                    className="px-3 py-1 bg-kamino-700 hover:bg-kamino-600 rounded text-sm text-gray-300"
+                >
+                    Show Whitelist
+                </button>
+            </div>
 
             {/* Fast Commands */}
             <div className="flex gap-2 flex-wrap">

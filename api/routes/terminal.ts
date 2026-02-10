@@ -17,16 +17,25 @@ app.post('/exec', async (c) => {
         // Whitelist allowed commands for security
         const allowedCommands = [
             'openclaw status',
+            'openclaw',
             'ps aux | grep openclaw',
+            'ps aux | grep tsx',
             'tail -20 ~/.openclaw/gateway.log',
+            'tail -50 ~/.openclaw/gateway.log',
+            'tail -100 ~/.openclaw/gateway.log',
             'ls -la ~/.openclaw/',
-            'cat ~/.openclaw/.env | grep MODE'
+            'ls -la ~/.openclaw',
+            'ls ~/.openclaw/hooks',
+            'cat ~/.openclaw/.env | grep MODE',
+            'cat ~/.openclaw/.env'
         ]
 
-        const isAllowed = allowedCommands.some(allowed => command.startsWith(allowed))
+        const isAllowed = allowedCommands.some(allowed => command.trim().startsWith(allowed))
 
         if (!isAllowed) {
-            return c.json({ error: 'Command not allowed. Use predefined fast commands.' }, 403)
+            return c.json({
+                error: `Command not whitelisted: "${command}"\n\nAllowed commands:\n${allowedCommands.map(c => `  • ${c}`).join('\n')}`
+            }, 403)
         }
 
         const { stdout, stderr } = await execAsync(command, {
