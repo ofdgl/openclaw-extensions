@@ -1,29 +1,76 @@
 import { Activity, Users, Cpu, HardDrive, Zap, MessageSquare } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { API_BASE_URL, API_KEY } from '../config/api'
 
-// Mock data - will be replaced with real API calls
-const stats = {
-    activeSessions: 3,
-    totalRequests: 1247,
-    tokensToday: 145890,
-    costToday: 2.34,
-    cpuUsage: 12,
-    memoryUsage: 34,
+interface DashboardStats {
+    today: {
+        totalTokens: number
+        totalCost: number
+        requestCount: number
+    }
+    system: {
+        cpu: string
+        ram: string
+        uptime: number
+    }
+    agents: Array<{
+        id: string
+        status: string
+        sessions: number
+    }>
 }
 
-const agents = [
-    { name: 'Main Agent', status: 'active', model: 'claude-sonnet-4-5', lastActivity: '2 min ago' },
-    { name: 'Guest Agent', status: 'idle', model: 'gemini-2.0-flash', lastActivity: '15 min ago' },
-    { name: 'Coder Agent', status: 'blocked', model: 'claude-sonnet-4-5', lastActivity: '1 hour ago' },
-]
-
-const recentActivity = [
-    { time: '18:20', user: '+905357874261', message: 'Token logs talep edildi', tokens: 45 },
-    { time: '18:15', user: '+905070364656', message: 'Merhaba', tokens: 120 },
-    { time: '18:10', user: '+905357874261', message: 'Mode switch komutu', tokens: 89 },
-    { time: '18:05', user: 'System', message: 'Gateway restart', tokens: 0 },
-]
+interface ActivityItem {
+    time: string
+    user: string
+    action: string
+    tokens: number
+    cost: number
+}
 
 export default function Dashboard() {
+    const [stats, setStats] = useState<DashboardStats | null>(null)
+    const [activity, setActivity] = useState<ActivityItem[]>([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [statsRes, activityRes] = await Promise.all([
+                    fetch(`${API_BASE_URL}/api/dashboard/stats?key=${API_KEY}`),
+                    fetch(`${API_BASE_URL}/api/dashboard/activity?key=${API_KEY}`)
+                ])
+
+                if (statsRes.ok) {
+                    const statsData = await statsRes.json()
+                    setStats(statsData)
+                }
+
+                if (activityRes.ok) {
+                    const activityData = await activityRes.json()
+                    setActivity(activityData.activity)
+                }
+            } catch (error) {
+                console.error('Failed to fetch dashboard data:', error)
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        fetchData()
+        // Refresh every 30 seconds
+        const interval = setInterval(fetchData, 30000)
+        return () => clearInterval(interval)
+    }, [])
+
+    if (loading || !stats) {
+        return (
+            <div className="p-6 flex items-center justify-center h-full">
+                <div className="text-gray-400">Loading dashboard...</div>
+            </div>
+        )
+    }
+
     return (
         <div className="p-6 space-y-6">
             {/* Header */}
@@ -37,25 +84,25 @@ export default function Dashboard() {
                 <StatCard
                     icon={<Users size={20} />}
                     label="Aktif Sessions"
-                    value={stats.activeSessions}
+                    value={stats.agents.filter(a => a.status === 'active').reduce((sum, a) => sum + a.sessions, 0)}
                     color="blue"
                 />
                 <StatCard
                     icon={<Zap size={20} />}
                     label="Bugünkü Tokens"
-                    value={stats.tokensToday.toLocaleString()}
+                    value={stats.today.totalTokens.toLocaleString()}
                     color="purple"
                 />
                 <StatCard
                     icon={<Activity size={20} />}
                     label="Toplam Requests"
-                    value={stats.totalRequests}
+                    value={stats.today.requestCount}
                     color="green"
                 />
                 <StatCard
                     icon={<MessageSquare size={20} />}
                     label="Bugünkü Maliyet"
-                    value={`$${stats.costToday}`}
+                    value={`$${stats.today.totalCost.toFixed(4)}`}
                     color="yellow"
                 />
             </div>
@@ -70,10 +117,10 @@ export default function Dashboard() {
                     <div className="relative h-2 bg-kamino-700 rounded-full overflow-hidden">
                         <div
                             className="absolute h-full bg-kamino-accent rounded-full transition-all"
-                            style={{ width: `${stats.cpuUsage}%` }}
+                            style={{ width: `${stats.system.cpu}%` }}
                         />
                     </div>
-                    <div className="text-right text-sm text-gray-400 mt-1">{stats.cpuUsage}%</div>
+                    <div className="text-right text-sm text-gray-400 mt-1">{stats.system.cpu}%</div>
                 </div>
                 <div className="bg-kamino-800 rounded-lg p-4 border border-kamino-700">
                     <div className="flex items-center gap-2 mb-3">
@@ -83,10 +130,10 @@ export default function Dashboard() {
                     <div className="relative h-2 bg-kamino-700 rounded-full overflow-hidden">
                         <div
                             className="absolute h-full bg-purple-500 rounded-full transition-all"
-                            style={{ width: `${stats.memoryUsage}%` }}
+                            style={{ width: `${stats.system.ram}%` }}
                         />
                     </div>
-                    <div className="text-right text-sm text-gray-400 mt-1">{stats.memoryUsage}%</div>
+                    <div className="text-right text-sm text-gray-400 mt-1">{stats.system.ram}%</div>
                 </div>
             </div>
 
@@ -98,15 +145,14 @@ export default function Dashboard() {
                         <h2 className="font-semibold text-white">Agents</h2>
                     </div>
                     <div className="divide-y divide-kamino-700">
-                        {agents.map((agent, i) => (
-                            <div key={i} className="p-4 flex items-center justify-between">
+                        {stats.agents.map((agent) => (
+                            <div key={agent.id} className="p-4 flex items-center justify-between">
                                 <div>
-                                    <div className="font-medium text-white">{agent.name}</div>
-                                    <div className="text-xs text-gray-500">{agent.model}</div>
+                                    <div className="font-medium text-white">{agent.id}</div>
+                                    <div className="text-xs text-gray-500">{agent.sessions} sessions</div>
                                 </div>
                                 <div className="text-right">
                                     <StatusBadge status={agent.status} />
-                                    <div className="text-xs text-gray-500 mt-1">{agent.lastActivity}</div>
                                 </div>
                             </div>
                         ))}
@@ -119,11 +165,11 @@ export default function Dashboard() {
                         <h2 className="font-semibold text-white">Son Aktivite</h2>
                     </div>
                     <div className="divide-y divide-kamino-700 max-h-64 overflow-auto">
-                        {recentActivity.map((item, i) => (
+                        {activity.map((item, i) => (
                             <div key={i} className="p-3 flex items-center gap-3">
-                                <div className="text-xs text-gray-500 w-12">{item.time}</div>
+                                <div className="text-xs text-gray-500 w-12">{new Date(item.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</div>
                                 <div className="flex-1">
-                                    <div className="text-sm text-white truncate">{item.message}</div>
+                                    <div className="text-sm text-white truncate">{item.action}</div>
                                     <div className="text-xs text-gray-500">{item.user}</div>
                                 </div>
                                 {item.tokens > 0 && (
