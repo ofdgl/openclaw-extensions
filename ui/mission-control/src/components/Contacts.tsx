@@ -1,166 +1,128 @@
-import { Users, UserPlus, Edit, Trash2, MessageSquare } from 'lucide-react'
-import { useState } from 'react'
+import { Users, UserPlus, Edit, Trash2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { API_BASE_URL, API_KEY } from '../config/api'
 
-const contacts = [
-    {
-        id: '1',
-        name: 'Ömer',
-        phone: '+905357874261',
-        category: 'admin',
-        addedAt: '2026-01-15',
-        lastSeen: '1 min ago',
-        messageCount: 234,
-        rateLimit: { current: 3, max: 1000, window: '1 hour' },
-    },
-    {
-        id: '2',
-        name: 'Ekrem',
-        phone: '+905070364656',
-        category: 'trusted',
-        addedAt: '2026-01-20',
-        lastSeen: '10 min ago',
-        messageCount: 45,
-        rateLimit: { current: 2, max: 50, window: '1 hour' },
-    },
-    {
-        id: '3',
-        name: 'Furkan',
-        phone: '+905306310567',
-        category: 'guest',
-        addedAt: '2026-02-01',
-        lastSeen: '3 hours ago',
-        messageCount: 12,
-        rateLimit: { current: 8, max: 8, window: '1 hour' },
-    },
-]
-
-const categories = [
-    { id: 'admin', label: 'Admin', color: 'bg-red-500/20 text-red-400', description: 'Full access, no restrictions' },
-    { id: 'trusted', label: 'Trusted', color: 'bg-green-500/20 text-green-400', description: 'Higher rate limits, main agent' },
-    { id: 'guest', label: 'Guest', color: 'bg-gray-500/20 text-gray-400', description: 'Limited access, guest agent' },
-    { id: 'blocked', label: 'Blocked', color: 'bg-red-500/20 text-red-400', description: 'No access' },
-]
+interface Contact {
+    id: string
+    phone: string
+    name: string
+    category: string
+    lastActivity: string
+    messageCount: number
+}
 
 export default function Contacts() {
-    const [filter, setFilter] = useState<string>('all')
-    const [showAddModal, setShowAddModal] = useState(false)
+    const [contacts, setContacts] = useState<Contact[]>([])
+    const [loading, setLoading] = useState(true)
+    const [filter, setFilter] = useState('all')
 
-    const filtered = filter === 'all' ? contacts : contacts.filter(c => c.category === filter)
+    useEffect(() => {
+        fetchContacts()
+    }, [filter])
+
+    const fetchContacts = async () => {
+        try {
+            const url = filter === 'all'
+                ? `${API_BASE_URL}/api/contacts?key=${API_KEY}`
+                : `${API_BASE_URL}/api/contacts?key=${API_KEY}&category=${filter}`
+
+            const res = await fetch(url)
+            if (res.ok) {
+                const data = await res.json()
+                setContacts(data.contacts)
+            }
+        } catch (e) {
+            console.error('Failed to fetch contacts:', e)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const updateCategory = async (id: string, category: string) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/contacts/${id}?key=${API_KEY}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ category })
+            })
+            if (res.ok) fetchContacts()
+        } catch (e) {
+            console.error('Failed to update contact:', e)
+        }
+    }
+
+    if (loading) {
+        return <div className="p-6 text-gray-400">Loading contacts...</div>
+    }
 
     return (
         <div className="p-6 space-y-6">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-white">Contacts & Access Control</h1>
-                <button
-                    onClick={() => setShowAddModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-kamino-accent rounded-lg text-white hover:bg-blue-600"
-                >
-                    <UserPlus size={16} />
+                <button className="px-4 py-2 bg-kamino-accent hover:bg-blue-600 rounded-lg text-white flex items-center gap-2">
+                    <UserPlus size={18} />
                     Add Contact
                 </button>
             </div>
 
-            {/* Category Pills */}
             <div className="flex gap-2">
-                <button
-                    onClick={() => setFilter('all')}
-                    className={`px-3 py-1.5 rounded-full text-xs ${filter === 'all' ? 'bg-kamino-accent text-white' : 'bg-kamino-800 text-gray-400 border border-kamino-700'
-                        }`}
-                >
-                    All ({contacts.length})
-                </button>
-                {categories.map(cat => {
-                    const count = contacts.filter(c => c.category === cat.id).length
-                    return (
-                        <button
-                            key={cat.id}
-                            onClick={() => setFilter(cat.id)}
-                            className={`px-3 py-1.5 rounded-full text-xs ${filter === cat.id ? 'bg-kamino-accent text-white' : 'bg-kamino-800 text-gray-400 border border-kamino-700'
-                                }`}
-                        >
-                            {cat.label} ({count})
-                        </button>
-                    )
-                })}
-            </div>
-
-            {/* Category Descriptions */}
-            <div className="grid grid-cols-4 gap-3">
-                {categories.map(cat => (
-                    <div key={cat.id} className="bg-kamino-800 rounded-lg p-3 border border-kamino-700">
-                        <span className={`text-xs px-2 py-1 rounded ${cat.color}`}>{cat.label}</span>
-                        <p className="text-xs text-gray-500 mt-2">{cat.description}</p>
-                    </div>
+                {['all', 'admin', 'trusted', 'guest', 'blocked'].map((cat) => (
+                    <button
+                        key={cat}
+                        onClick={() => setFilter(cat)}
+                        className={`px-4 py-2 rounded-lg transition-colors ${filter === cat
+                            ? 'bg-kamino-accent text-white'
+                            : 'bg-kamino-700 text-gray-400 hover:bg-kamino-600'
+                            }`}
+                    >
+                        {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                    </button>
                 ))}
             </div>
 
-            {/* Contacts List */}
-            <div className="bg-kamino-800 rounded-lg border border-kamino-700">
+            <div className="bg-kamino-800 rounded-lg border border-kamino-700 overflow-hidden">
                 <table className="w-full">
                     <thead className="bg-kamino-700">
                         <tr>
-                            <th className="text-left px-4 py-3 text-sm font-medium text-gray-300">Contact</th>
-                            <th className="text-left px-4 py-3 text-sm font-medium text-gray-300">Phone</th>
-                            <th className="text-left px-4 py-3 text-sm font-medium text-gray-300">Category</th>
-                            <th className="text-left px-4 py-3 text-sm font-medium text-gray-300">Rate Limit</th>
-                            <th className="text-left px-4 py-3 text-sm font-medium text-gray-300">Last Seen</th>
-                            <th className="text-right px-4 py-3 text-sm font-medium text-gray-300">Actions</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">NAME</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">PHONE</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">CATEGORY</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">MESSAGES</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">LAST ACTIVITY</th>
+                            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-400">ACTIONS</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-kamino-700">
-                        {filtered.map((contact) => {
-                            const ratePct = (contact.rateLimit.current / contact.rateLimit.max) * 100
-                            const isNearLimit = ratePct >= 80
-                            return (
-                                <tr key={contact.id} className="hover:bg-kamino-700/50">
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-kamino-600 flex items-center justify-center text-sm font-medium text-white">
-                                                {contact.name[0]}
-                                            </div>
-                                            <div>
-                                                <div className="text-sm text-white font-medium">{contact.name}</div>
-                                                <div className="text-xs text-gray-500">{contact.messageCount} messages</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-300">{contact.phone}</td>
-                                    <td className="px-4 py-3">
-                                        <span className={`text-xs px-2 py-1 rounded ${categories.find(c => c.id === contact.category)?.color
-                                            }`}>
-                                            {contact.category}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex-1 h-1.5 bg-kamino-700 rounded-full overflow-hidden">
-                                                <div
-                                                    className={`h-full rounded-full ${isNearLimit ? 'bg-red-500' : 'bg-green-500'}`}
-                                                    style={{ width: `${ratePct}%` }}
-                                                />
-                                            </div>
-                                            <span className={`text-xs ${isNearLimit ? 'text-red-400' : 'text-gray-400'}`}>
-                                                {contact.rateLimit.current}/{contact.rateLimit.max}
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-400">{contact.lastSeen}</td>
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center justify-end gap-2">
-                                            <button className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-kamino-700 rounded">
-                                                <MessageSquare size={14} />
-                                            </button>
-                                            <button className="p-1.5 text-gray-400 hover:text-yellow-400 hover:bg-kamino-700 rounded">
-                                                <Edit size={14} />
-                                            </button>
-                                            <button className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-kamino-700 rounded">
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            )
-                        })}
+                        {contacts.map((contact) => (
+                            <tr key={contact.id} className="hover:bg-kamino-700/50">
+                                <td className="px-4 py-3 text-sm text-white">{contact.name}</td>
+                                <td className="px-4 py-3 text-sm text-gray-400">{contact.phone}</td>
+                                <td className="px-4 py-3">
+                                    <select
+                                        value={contact.category}
+                                        onChange={(e) => updateCategory(contact.id, e.target.value)}
+                                        className="text-xs px-2 py-1 rounded-full bg-kamino-700 border border-kamino-600 text-white"
+                                    >
+                                        <option value="admin">Admin</option>
+                                        <option value="trusted">Trusted</option>
+                                        <option value="guest">Guest</option>
+                                        <option value="blocked">Blocked</option>
+                                    </select>
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-400">{contact.messageCount}</td>
+                                <td className="px-4 py-3 text-sm text-gray-400">
+                                    {new Date(contact.lastActivity).toLocaleDateString()}
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                    <button className="p-1 hover:bg-kamino-600 rounded">
+                                        <Edit size={16} className="text-gray-400" />
+                                    </button>
+                                    <button className="p-1 hover:bg-kamino-600 rounded ml-2">
+                                        <Trash2 size={16} className="text-red-400" />
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
                     </tbody>
                 </table>
             </div>
