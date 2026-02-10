@@ -1,46 +1,32 @@
 import { Hono } from 'hono'
 import fs from 'fs/promises'
 import path from 'path'
-import yaml from 'yaml'
 
 const app = new Hono()
 
 // GET /api/cron/jobs - List all cron jobs
 app.get('/jobs', async (c) => {
     try {
-        const cronDir = path.join(process.env.HOME || '/root', '.openclaw/cron')
+        const jobsFile = path.join(process.env.HOME || '/root', '.openclaw/cron/jobs.json')
 
         try {
-            await fs.access(cronDir)
+            const content = await fs.readFile(jobsFile, 'utf-8')
+            const data = JSON.parse(content)
+
+            const jobs = (data.jobs || []).map((job: any) => ({
+                id: job.id,
+                name: job.name || job.id,
+                schedule: job.schedule?.cron || '* * * * *',
+                enabled: job.enabled !== false,
+                lastRun: job.state?.lastRunAtMs ? new Date(job.state.lastRunAtMs).toISOString() : null,
+                nextRun: job.state?.nextRunAtMs ? new Date(job.state.nextRunAtMs).toISOString() : null,
+                agent: job.targetAgent || 'main'
+            }))
+
+            return c.json({ jobs })
         } catch {
             return c.json({ jobs: [] })
         }
-
-        const files = await fs.readdir(cronDir)
-        const yamlFiles = files.filter(f => f.endsWith('.yaml') || f.endsWith('.yml'))
-
-        const jobs = []
-
-        for (const file of yamlFiles) {
-            try {
-                const content = await fs.readFile(path.join(cronDir, file), 'utf-8')
-                const config = yaml.parse(content)
-
-                jobs.push({
-                    id: path.basename(file, path.extname(file)),
-                    name: config.name || file,
-                    schedule: config.schedule || config.cron || '* * * * *',
-                    enabled: config.enabled !== false,
-                    lastRun: config.lastRun || null,
-                    nextRun: null, // Calculate later if needed
-                    agent: config.agent || 'main-agent'
-                })
-            } catch (e) {
-                console.error(`Failed to parse cron file ${file}:`, e)
-            }
-        }
-
-        return c.json({ jobs })
     } catch (error) {
         console.error('Failed to fetch cron jobs:', error)
         return c.json({ jobs: [] })
