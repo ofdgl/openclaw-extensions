@@ -110,28 +110,14 @@ app.get('/', async (c) => {
     }
 })
 
-// PATCH /api/agents/:id/model - Update agent model
+// PATCH /api/agents/:id/model - Model selection (read-only, does NOT modify openclaw.json)
+// NOTE: Writing to openclaw.json can corrupt the config and break OpenClaw.
+// Model changes should be done via the openclaw CLI, not the API.
 app.patch('/:id/model', async (c) => {
-    try {
-        const agentId = c.req.param('id')
-        const { model } = await c.req.json()
-
-        const configPath = path.join(process.env.HOME || '/root', '.openclaw/openclaw.json')
-        const content = await fs.readFile(configPath, 'utf-8')
-        const config = JSON.parse(content)
-
-        if (!config.agents) config.agents = {}
-        if (!config.agents.entries) config.agents.entries = {}
-        if (!config.agents.entries[agentId]) config.agents.entries[agentId] = {}
-
-        config.agents.entries[agentId].model = model
-
-        await fs.writeFile(configPath, JSON.stringify(config, null, 2))
-        return c.json({ success: true, agent: agentId, model })
-    } catch (error) {
-        console.error('Failed to update agent model:', error)
-        return c.json({ error: 'Failed to update model' }, 500)
-    }
+    const agentId = c.req.param('id')
+    const { model } = await c.req.json()
+    console.log(`Model change requested for ${agentId}: ${model} (not applied - use openclaw CLI)`)
+    return c.json({ success: false, message: 'Model changes must be done via openclaw CLI to avoid config corruption' })
 })
 
 // GET /api/agents/:id/outputs - Get agent outputs
