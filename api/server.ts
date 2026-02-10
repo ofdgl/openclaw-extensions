@@ -11,22 +11,22 @@ import { memoryRoutes } from './routes/memory'
 import { cronRoutes } from './routes/cron'
 import { terminalRoutes } from './routes/terminal'
 import { logviewerRoutes } from './routes/logviewer'
+import { securityRoutes } from './routes/security'
 
 const app = new Hono()
 
-// Load API secret from environment
-const API_SECRET = process.env.API_SECRET_KEY || 'dev-secret-key'
-
-// CORS for frontend
-app.use('/*', cors({
-    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://76.13.137.215', 'http://76.13.137.215:5173'],
+// CORS
+app.use('*', cors({
+    origin: ['http://localhost:5173', 'http://76.13.137.215'],
     credentials: true,
 }))
 
-// Auth middleware for API routes
+// Auth middleware
 app.use('/api/*', async (c, next) => {
     const key = c.req.query('key')
-    if (key !== API_SECRET) {
+    const expectedKey = process.env.API_SECRET_KEY || 'dev-secret-key'
+
+    if (key !== expectedKey) {
         return c.json({ error: 'Unauthorized' }, 401)
     }
     await next()
@@ -47,5 +47,6 @@ app.route('/api/memory', memoryRoutes)
 app.route('/api/cron', cronRoutes)
 app.route('/api/terminal', terminalRoutes)
 app.route('/api/logviewer', logviewerRoutes)
+app.route('/api/security', securityRoutes)
 
 export default app

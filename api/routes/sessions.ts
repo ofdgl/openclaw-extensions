@@ -36,9 +36,9 @@ app.get('/', async (c) => {
                 const filePath = path.join(sessionsDir, file)
                 const content = await fs.readFile(filePath, 'utf-8')
 
-                // Parse JSONL format (each line is a message)
+                // Parse JSONL format (each line is a JSON object)
                 const lines = content.trim().split('\n').filter(l => l.trim())
-                const messages = lines.map(l => {
+                const allEntries = lines.map(l => {
                     try {
                         return JSON.parse(l)
                     } catch {
@@ -46,20 +46,24 @@ app.get('/', async (c) => {
                     }
                 }).filter(Boolean)
 
-                if (messages.length > 0) {
-                    const firstMsg = messages[0]
-                    const lastMsg = messages[messages.length - 1]
+                if (allEntries.length === 0) continue
 
-                    sessions.push({
-                        sessionId: file.replace('.json', '').replace('.jsonl', ''),
-                        user: firstMsg.user || firstMsg.from || 'Unknown',
-                        phone: firstMsg.phone || firstMsg.jid || '',
-                        agent: 'main-agent',
-                        createdAt: firstMsg.timestamp || new Date().toISOString(),
-                        lastActivity: lastMsg.timestamp || new Date().toISOString(),
-                        messageCount: messages.length
-                    })
-                }
+                // First line is session metadata, rest are messages
+                const sessionMeta = allEntries[0]
+                const messages = allEntries.slice(1).filter((m: any) => m.role || m.from || m.content)
+
+                // Find first user message to get user info
+                const firstUserMsg = messages.find((m: any) => m.role === 'user' || m.from)
+
+                sessions.push({
+                    sessionId: file.replace('.json', '').replace('.jsonl', ''),
+                    user: firstUserMsg?.senderName || firstUserMsg?.from || firstUserMsg?.user || 'Unknown',
+                    phone: firstUserMsg?.jid || firstUserMsg?.phone || '',
+                    agent: 'main-agent',
+                    createdAt: sessionMeta?.timestamp || allEntries[0]?.timestamp || new Date().toISOString(),
+                    lastActivity: allEntries[allEntries.length - 1]?.timestamp || new Date().toISOString(),
+                    messageCount: messages.length
+                })
             } catch (e) {
                 console.error(`Failed to parse session file ${file}:`, e)
             }
@@ -93,20 +97,32 @@ app.get('/:id/messages', async (c) => {
         const content = await fs.readFile(filePath, 'utf-8')
         const lines = content.trim().split('\n').filter(l => l.trim())
 
-        const messages = lines.map(l => {
+        const allEntries = lines.map(l => {
             try {
-                const msg = JSON.parse(l)
-                return {
-                    role: msg.role || (msg.from ? 'user' : 'assistant'),
-                    content: msg.content || msg.text || '',
-                    timestamp: msg.timestamp || new Date().toISOString(),
-                    tokens: msg.tokens || 0,
-                    cost: msg.cost || 0
-                }
+                return JSON.parse(l)
             } catch {
                 return null
             }
         }).filter(Boolean)
+
+        // Skip first line (session metadata), process messages
+        const messages = allEntries.slice(1).map((msg: any) => {
+            // Determine role
+            let role = 'assistant'
+            if (msg.role) {
+                role = msg.role
+            } else if (msg.from || msg.jid) {
+                role = 'user'
+            }
+
+            return {
+                role,
+                content: msg.content || msg.text || msg.body || '',
+                timestamp: msg.timestamp || new Date().toISOString(),
+                tokens: msg.usage?.total_tokens || msg.tokens || 0,
+                cost: msg.cost || 0
+            }
+        }).filter((m: any) => m.content) // Only messages with content
 
         return c.json({ messages })
     } catch (error) {
