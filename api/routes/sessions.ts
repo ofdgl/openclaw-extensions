@@ -9,6 +9,7 @@ interface Session {
     user: string
     phone: string
     agent: string
+    model: string
     createdAt: string
     lastActivity: string
     messageCount: number
@@ -19,7 +20,6 @@ app.get('/', async (c) => {
     try {
         const sessionsDir = path.join(process.env.HOME || '/root', '.openclaw/agents/main/sessions')
 
-        // Check if directory exists
         try {
             await fs.access(sessionsDir)
         } catch {
@@ -31,37 +31,43 @@ app.get('/', async (c) => {
 
         const sessions: Session[] = []
 
-        for (const file of jsonFiles.slice(0, 50)) { // Limit to 50 sessions
+        for (const file of jsonFiles.slice(0, 50)) {
             try {
                 const filePath = path.join(sessionsDir, file)
                 const content = await fs.readFile(filePath, 'utf-8')
-
-                // Parse JSONL format (each line is a JSON object)
                 const lines = content.trim().split('\n').filter(l => l.trim())
-                const allEntries = lines.map(l => {
-                    try {
-                        return JSON.parse(l)
-                    } catch {
-                        return null
-                    }
+
+                const entries = lines.map(l => {
+                    try { return JSON.parse(l) } catch { return null }
                 }).filter(Boolean)
 
-                if (allEntries.length === 0) continue
+                if (entries.length === 0) continue
 
-                // First line is session metadata, rest are messages
-                const sessionMeta = allEntries[0]
-                const messages = allEntries.slice(1).filter((m: any) => m.role || m.from || m.content)
+                // Session metadata is first line with type:'session'
+                const sessionMeta = entries.find((e: any) => e.type === 'session')
+                // Model info from model_change entry
+                const modelEntry = entries.find((e: any) => e.type === 'model_change')
+                // Actual messages have type:'message'
+                const messages = entries.filter((e: any) => e.type === 'message')
 
-                // Find first user message to get user info
-                const firstUserMsg = messages.find((m: any) => m.role === 'user' || m.from)
+                // Extract user info from first user message
+                let userName = 'Unknown'
+                let phone = ''
+                const firstUserMsg = messages.find((m: any) => m.message?.role === 'user')
+                if (firstUserMsg) {
+                    // Try to get user name from message metadata
+                    userName = firstUserMsg.senderName || firstUserMsg.pushName || firstUserMsg.from || 'User'
+                    phone = firstUserMsg.jid || firstUserMsg.phone || ''
+                }
 
                 sessions.push({
                     sessionId: file.replace('.json', '').replace('.jsonl', ''),
-                    user: firstUserMsg?.senderName || firstUserMsg?.from || firstUserMsg?.user || 'Unknown',
-                    phone: firstUserMsg?.jid || firstUserMsg?.phone || '',
-                    agent: 'main-agent',
-                    createdAt: sessionMeta?.timestamp || allEntries[0]?.timestamp || new Date().toISOString(),
-                    lastActivity: allEntries[allEntries.length - 1]?.timestamp || new Date().toISOString(),
+                    user: userName,
+                    phone,
+                    agent: sessionMeta?.cwd?.includes('agents/') ? 'main-agent' : 'main-agent',
+                    model: modelEntry?.modelId || modelEntry?.provider || 'unknown',
+                    createdAt: sessionMeta?.timestamp || entries[0]?.timestamp || new Date().toISOString(),
+                    lastActivity: entries[entries.length - 1]?.timestamp || new Date().toISOString(),
                     messageCount: messages.length
                 })
             } catch (e) {
@@ -86,7 +92,7 @@ app.get('/:id/messages', async (c) => {
         const sessionId = c.req.param('id')
         const sessionsDir = path.join(process.env.HOME || '/root', '.openclaw/agents/main/sessions')
 
-        // Try both .json and .jsonl extensions
+        // Try .jsonl first, then .json
         let filePath = path.join(sessionsDir, `${sessionId}.jsonl`)
         try {
             await fs.access(filePath)
@@ -97,32 +103,37 @@ app.get('/:id/messages', async (c) => {
         const content = await fs.readFile(filePath, 'utf-8')
         const lines = content.trim().split('\n').filter(l => l.trim())
 
-        const allEntries = lines.map(l => {
-            try {
-                return JSON.parse(l)
-            } catch {
-                return null
-            }
+        const entries = lines.map(l => {
+            try { return JSON.parse(l) } catch { return null }
         }).filter(Boolean)
 
-        // Skip first line (session metadata), process messages
-        const messages = allEntries.slice(1).map((msg: any) => {
-            // Determine role
-            let role = 'assistant'
-            if (msg.role) {
-                role = msg.role
-            } else if (msg.from || msg.jid) {
-                role = 'user'
-            }
+        // Only type:'message' entries are actual messages
+        const messages = entries
+            .filter((e: any) => e.type === 'message')
+            .map((entry: any) => {
+                // Role from entry.message.role
+                const role = entry.message?.role || 'unknown'
 
-            return {
-                role,
-                content: msg.content || msg.text || msg.body || '',
-                timestamp: msg.timestamp || new Date().toISOString(),
-                tokens: msg.usage?.total_tokens || msg.tokens || 0,
-                cost: msg.cost || 0
-            }
-        }).filter((m: any) => m.content) // Only messages with content
+                // Content is an array of parts: [{type:'text', text:'...'}]
+                let textContent = ''
+                if (Array.isArray(entry.content)) {
+                    textContent = entry.content
+                        .filter((p: any) => p.type === 'text')
+                        .map((p: any) => p.text)
+                        .join('\n')
+                } else if (typeof entry.content === 'string') {
+                    textContent = entry.content
+                }
+
+                return {
+                    role,
+                    content: textContent,
+                    timestamp: entry.timestamp || new Date().toISOString(),
+                    tokens: entry.usage?.total_tokens || entry.tokens || 0,
+                    cost: entry.cost || 0
+                }
+            })
+            .filter((m: any) => m.content) // Only messages with actual text content
 
         return c.json({ messages })
     } catch (error) {

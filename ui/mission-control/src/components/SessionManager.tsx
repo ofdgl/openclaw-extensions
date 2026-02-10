@@ -18,6 +18,7 @@ interface Session {
     outputTokens: number
     cost: number
     lastActivity: string
+    phone: string
 }
 
 interface Message {
@@ -42,7 +43,21 @@ export default function SessionManager({ onNavigate }: SessionManagerProps) {
 
                 if (res.ok) {
                     const data = await res.json()
-                    setSessions(data.sessions)
+                    // Map API response to UI format
+                    const mapped = (data.sessions || []).map((s: any) => ({
+                        id: s.sessionId || s.id,
+                        user: s.user || 'Unknown',
+                        agent: s.agent || 'main-agent',
+                        status: 'active',
+                        model: s.model || 'unknown',
+                        messageCount: s.messageCount || 0,
+                        inputTokens: 0,
+                        outputTokens: 0,
+                        cost: 0,
+                        lastActivity: s.lastActivity || new Date().toISOString(),
+                        phone: s.phone || ''
+                    }))
+                    setSessions(mapped)
                     setError(false)
                 } else {
                     setError(true)
@@ -69,7 +84,7 @@ export default function SessionManager({ onNavigate }: SessionManagerProps) {
 
                 if (res.ok) {
                     const data = await res.json()
-                    setMessages(data.messages)
+                    setMessages(data.messages || [])
                 }
             } catch (e) {
                 console.error('Failed to fetch messages:', e)
@@ -78,6 +93,17 @@ export default function SessionManager({ onNavigate }: SessionManagerProps) {
 
         fetchMessages()
     }, [selectedSession])
+
+    const getModelDisplayName = (modelId: string) => {
+        if (!modelId || modelId === 'unknown') return 'Unknown'
+        if (modelId.includes('sonnet-4-5')) return 'Sonnet 4.5'
+        if (modelId.includes('sonnet-4')) return 'Sonnet 4'
+        if (modelId.includes('haiku')) return 'Haiku 3.5'
+        if (modelId.includes('opus')) return 'Opus 4'
+        // Try to get last part after /
+        const parts = modelId.split('/')
+        return parts[parts.length - 1] || modelId
+    }
 
     if (loading) {
         return (
@@ -116,29 +142,38 @@ export default function SessionManager({ onNavigate }: SessionManagerProps) {
                         <h2 className="font-semibold text-white">Active Sessions ({sessions.length})</h2>
                     </div>
                     <div className="divide-y divide-kamino-700 max-h-[600px] overflow-y-auto">
-                        {sessions.map((session) => (
-                            <div
-                                key={session.id}
-                                onClick={() => setSelectedSession(session.id)}
-                                className={`p-4 cursor-pointer hover:bg-kamino-700/50 transition-colors ${selectedSession === session.id ? 'bg-kamino-700' : ''
-                                    }`}
-                            >
-                                <div className="flex items-center justify-between mb-2">
-                                    <div className="flex items-center gap-2">
-                                        <StatusDot status={session.status} />
-                                        <span className="font-medium text-white">{session.user}</span>
+                        {sessions.length === 0 ? (
+                            <div className="p-8 text-center text-gray-500">No sessions found</div>
+                        ) : (
+                            sessions.map((session) => (
+                                <div
+                                    key={session.id}
+                                    onClick={() => setSelectedSession(session.id)}
+                                    className={`p-4 cursor-pointer hover:bg-kamino-700/50 transition-colors ${selectedSession === session.id ? 'bg-kamino-700' : ''
+                                        }`}
+                                >
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <StatusDot status={session.status} />
+                                            <span className="font-medium text-white">{session.user}</span>
+                                        </div>
+                                        <span className="text-xs text-gray-500">{session.agent}</span>
                                     </div>
-                                    <span className="text-xs text-gray-500">{session.agent}</span>
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-gray-400">{session.messageCount} messages</span>
+                                        <span className="text-kamino-accent text-xs">
+                                            {getModelDisplayName(session.model)}
+                                        </span>
+                                    </div>
+                                    {session.phone && (
+                                        <div className="text-xs text-gray-500 mt-1">{session.phone}</div>
+                                    )}
+                                    <div className="text-xs text-gray-600 mt-1">
+                                        {new Date(session.lastActivity).toLocaleString()}
+                                    </div>
                                 </div>
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="text-gray-400">{session.messageCount} messages</span>
-                                    <span className={`font-medium ${session.cost > 0 ? 'text-orange-400' : 'text-green-400'}`}>
-                                        {session.cost > 0 ? `$${session.cost.toFixed(2)}` : 'Free'}
-                                    </span>
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">{session.model}</div>
-                            </div>
-                        ))}
+                            ))
+                        )}
                     </div>
                 </div>
 
@@ -168,16 +203,16 @@ export default function SessionManager({ onNavigate }: SessionManagerProps) {
                                                 {new Date(msg.timestamp).toLocaleTimeString()}
                                             </span>
                                         </div>
-                                        <p className="text-sm text-gray-300">{msg.content}</p>
-                                        {msg.tokens && (
+                                        <p className="text-sm text-gray-300 whitespace-pre-wrap">{msg.content}</p>
+                                        {msg.tokens ? (
                                             <div className="text-xs text-gray-500 mt-1">
-                                                {msg.tokens} tokens • ${msg.cost?.toFixed(4)}
+                                                {msg.tokens} tokens{msg.cost ? ` • $${msg.cost.toFixed(4)}` : ''}
                                             </div>
-                                        )}
+                                        ) : null}
                                     </div>
                                 ))
                             ) : (
-                                <div className="text-center text-gray-500 py-8">No messages yet</div>
+                                <div className="text-center text-gray-500 py-8">No messages in this session</div>
                             )
                         ) : (
                             <div className="text-center text-gray-500 py-8">
