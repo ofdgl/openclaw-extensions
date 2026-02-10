@@ -110,14 +110,43 @@ app.get('/', async (c) => {
     }
 })
 
-// PATCH /api/agents/:id/model - Model selection (read-only, does NOT modify openclaw.json)
-// NOTE: Writing to openclaw.json can corrupt the config and break OpenClaw.
-// Model changes should be done via the openclaw CLI, not the API.
+// PATCH /api/agents/:id/model - Update default model in openclaw.json
+// Uses the correct path: agents.defaults.model.primary
 app.patch('/:id/model', async (c) => {
-    const agentId = c.req.param('id')
-    const { model } = await c.req.json()
-    console.log(`Model change requested for ${agentId}: ${model} (not applied - use openclaw CLI)`)
-    return c.json({ success: false, message: 'Model changes must be done via openclaw CLI to avoid config corruption' })
+    try {
+        const agentId = c.req.param('id')
+        const { model } = await c.req.json()
+
+        if (!model || typeof model !== 'string') {
+            return c.json({ error: 'Invalid model ID' }, 400)
+        }
+
+        // Only allow known model IDs
+        const allowedPrefixes = ['anthropic/', 'google/', 'openai/', 'claude-', 'gemini-', 'gpt-']
+        const isValid = allowedPrefixes.some(p => model.startsWith(p))
+        if (!isValid) {
+            return c.json({ error: 'Unknown model provider' }, 400)
+        }
+
+        const configPath = path.join(process.env.HOME || '/root', '.openclaw/openclaw.json')
+        const content = await fs.readFile(configPath, 'utf-8')
+        const config = JSON.parse(content)
+
+        // Set model at the correct path: agents.defaults.model.primary
+        if (!config.agents) config.agents = {}
+        if (!config.agents.defaults) config.agents.defaults = {}
+        if (!config.agents.defaults.model) config.agents.defaults.model = {}
+
+        const oldModel = config.agents.defaults.model.primary || 'unknown'
+        config.agents.defaults.model.primary = model
+
+        await fs.writeFile(configPath, JSON.stringify(config, null, 2))
+        console.log(`Model changed: ${oldModel} -> ${model} (requested for agent: ${agentId})`)
+        return c.json({ success: true, agent: agentId, oldModel, model })
+    } catch (error) {
+        console.error('Failed to update agent model:', error)
+        return c.json({ error: 'Failed to update model' }, 500)
+    }
 })
 
 // GET /api/agents/:id/outputs - Get agent outputs
