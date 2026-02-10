@@ -1,30 +1,33 @@
 import { Hono } from 'hono'
-import * as fs from 'fs'
-import * as path from 'path'
+import { parseBillingLogs } from '../services/billing'
 
 const app = new Hono()
 
-// Mock data for when files don't exist
-const mockLogs = [
-    { id: '1', timestamp: new Date().toISOString(), user: '+1234567890', message: 'Test message', model: 'claude-sonnet', tokens: 1500, cost: 0.045, thinking: 'Processing request...', tools: ['search'], retries: 0 },
-    { id: '2', timestamp: new Date().toISOString(), user: '+0987654321', message: 'Another message', model: 'gemini-flash', tokens: 800, cost: 0, thinking: '', tools: [], retries: 1 }
-]
-
 // GET /api/logs/tokens - Paginated token/message logs
-app.get('/tokens', (c) => {
+app.get('/tokens', async (c) => {
     const limit = parseInt(c.req.query('limit') || '50')
     const offset = parseInt(c.req.query('offset') || '0')
     const model = c.req.query('model')
     const user = c.req.query('user')
 
-    // Try to read from billing tracker logs
     try {
-        // In production: parse ~/.openclaw/logs/billing-tracker.log
-        // For now: return mock data
-        let logs = [...mockLogs]
+        const entries = await parseBillingLogs(1000)
+
+        let logs = entries.map(e => ({
+            id: `${e.timestamp}-${e.phone}`,
+            timestamp: e.timestamp,
+            user: `${e.user} (${e.phone})`,
+            message: `API request`,
+            model: e.model,
+            tokens: e.totalTokens,
+            cost: e.cost,
+            thinking: '',
+            tools: [],
+            retries: 0
+        }))
 
         if (model) logs = logs.filter(l => l.model.includes(model))
-        if (user) logs = logs.filter(l => l.user === user)
+        if (user) logs = logs.filter(l => l.user.includes(user))
 
         const paginated = logs.slice(offset, offset + limit)
 
@@ -35,24 +38,32 @@ app.get('/tokens', (c) => {
             limit
         })
     } catch (error) {
-        return c.json({ error: 'Failed to load logs', logs: [], total: 0 }, 500)
+        return c.json({ logs: [], total: 0, offset, limit })
     }
 })
 
 // GET /api/logs/tokens/:id/details - Specific message details
-app.get('/tokens/:id/details', (c) => {
+app.get('/tokens/:id/details', async (c) => {
     const id = c.req.param('id')
-    const log = mockLogs.find(l => l.id === id)
+    const entries = await parseBillingLogs(1000)
+
+    const log = entries.find(e => `${e.timestamp}-${e.phone}` === id)
 
     if (!log) {
         return c.json({ error: 'Log not found' }, 404)
     }
 
     return c.json({
-        ...log,
-        fullThinking: log.thinking,
-        toolCalls: log.tools.map(t => ({ tool: t, success: true })),
-        retryHistory: Array(log.retries).fill({ reason: 'Rate limit', delay: 1000 })
+        id,
+        timestamp: log.timestamp,
+        user: `${log.user} (${log.phone})`,
+        message: 'API request',
+        model: log.model,
+        tokens: log.totalTokens,
+        cost: log.cost,
+        fullThinking: '',
+        toolCalls: [],
+        retryHistory: []
     })
 })
 
