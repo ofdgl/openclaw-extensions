@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+}
+
+/* Custom colors using CSS variables for Tailwind v4 */
+@theme {
+  --color-kamino-900: #0c0e14;
+  --color-kamino-800: #111827;
+  --color-kamino-700: #1f2937;
+  --color-kamino-600: #374151;
+  --color-kamino-500: #6b7280;
+  --color-kamino-accent: #3b82f6;
+  --color-kamino-success: #22c55e;
+  --color-kamino-warning: #eab308;
+  --color-kamino-danger: #ef4444;
+}
+
+body {
+  background-color: var(--color-kamino-900);
+  color: #f3f4f6;
+  margin: 0;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: var(--color-kamino-800);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-kamino-600);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-kamino-500);
+}
