@@ -19,7 +19,7 @@ export type Page = 'dashboard' | 'cost' | 'tokens' | 'terminal' | 'settings' | '
 function App() {
   const [activePage, setActivePage] = useState<Page>('dashboard')
 
-  const handleNavigate = (page: Page, sessionId?: string) => {
+  const handleNavigate = (page: Page) => {
     setActivePage(page)
   }
 

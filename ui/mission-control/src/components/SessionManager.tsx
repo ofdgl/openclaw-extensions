@@ -1,4 +1,4 @@
-import { MessageSquare, Eye, Send, ExternalLink } from 'lucide-react'
+import { MessageSquare, /* Eye, */ Send, /* ExternalLink */ } from 'lucide-react'
 import { useState } from 'react'
 import type { Page } from '../App'
 
@@ -68,7 +68,7 @@ const conversationMock = [
     { role: 'assistant', content: 'Bugünkü token kullanımı: 145,890 token, $2.34 maliyet.', time: '18:20', model: 'claude-sonnet-4-5', tokens: 89, cost: 0.0008 },
 ]
 
-export default function SessionManager({ onNavigate }: SessionManagerProps = {}) {
+export default function SessionManager({ onNavigate }: SessionManagerProps) {
     const [selectedSession, setSelectedSession] = useState<string | null>(null)
     const [messageInput, setMessageInput] = useState('')
 
@@ -86,8 +86,8 @@ export default function SessionManager({ onNavigate }: SessionManagerProps = {})
                             key={session.id}
                             onClick={() => setSelectedSession(session.id)}
                             className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedSession === session.id
-                                    ? 'border-kamino-accent bg-kamino-accent/10'
-                                    : 'border-kamino-700 bg-kamino-800 hover:border-kamino-600'
+                                ? 'border-kamino-accent bg-kamino-accent/10'
+                                : 'border-kamino-700 bg-kamino-800 hover:border-kamino-600'
                                 }`}
                         >
                             <div className="flex items-center justify-between mb-1">
@@ -133,8 +133,8 @@ export default function SessionManager({ onNavigate }: SessionManagerProps = {})
                             {conversationMock.map((msg, i) => (
                                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                     <div className={`max-w-md px-4 py-2 rounded-lg ${msg.role === 'user'
-                                            ? 'bg-kamino-accent text-white'
-                                            : 'bg-kamino-700 text-gray-200'
+                                        ? 'bg-kamino-accent text-white'
+                                        : 'bg-kamino-700 text-gray-200'
                                         }`}>
                                         <div className="text-sm whitespace-pre-line">{msg.content}</div>
                                         <div className="flex items-center justify-between mt-1 text-[10px] text-gray-400">

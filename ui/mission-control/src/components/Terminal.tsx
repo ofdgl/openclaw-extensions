@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Play, RefreshCw, Power, ShieldCheck, Zap } from 'lucide-react'
+import { Play, RefreshCw, /* Power, */ ShieldCheck, Zap } from 'lucide-react'
 
 // Fast commands for quick access
 const fastCommands = [

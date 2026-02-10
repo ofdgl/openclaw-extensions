@@ -210,7 +210,9 @@ export default function TokenLogs({ onNavigate }: TokenLogsProps = {}) {
                                 <td className="px-4 py-3 text-sm text-right font-medium text-white">
                                     {log.totalTokens.toLocaleString()}
                                     {log.retries > 1 && (
-                                        <RotateCcw size={10} className="inline ml-1 text-orange-400" title={`${log.retries} retries`} />
+                                        <span className="inline-flex items-center ml-1" title={`${log.retries} retries`}>
+                                            <RotateCcw size={10} className="text-orange-400" />
+                                        </span>
                                     )}
                                 </td>
                                 <td className="px-4 py-3 text-sm text-right text-green-400">

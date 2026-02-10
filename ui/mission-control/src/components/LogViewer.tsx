@@ -1,4 +1,4 @@
-import { ScrollText, Filter, Download, AlertCircle } from 'lucide-react'
+import { /* Filter, */ Download, AlertCircle } from 'lucide-react'
 import { useState } from 'react'
 
 const logSources = ['gateway', 'security', 'hooks', 'agent-errors']
