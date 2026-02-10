@@ -114,22 +114,24 @@ app.get('/:id/messages', async (c) => {
                 // Role from entry.message.role
                 const role = entry.message?.role || 'unknown'
 
-                // Content is an array of parts: [{type:'text', text:'...'}]
+                // Content is in entry.message.content (NOT entry.content!)
+                // Format: [{type:'text', text:'...'}]
+                const msgContent = entry.message?.content
                 let textContent = ''
-                if (Array.isArray(entry.content)) {
-                    textContent = entry.content
+                if (Array.isArray(msgContent)) {
+                    textContent = msgContent
                         .filter((p: any) => p.type === 'text')
                         .map((p: any) => p.text)
                         .join('\n')
-                } else if (typeof entry.content === 'string') {
-                    textContent = entry.content
+                } else if (typeof msgContent === 'string') {
+                    textContent = msgContent
                 }
 
                 return {
                     role,
                     content: textContent,
                     timestamp: entry.timestamp || new Date().toISOString(),
-                    tokens: entry.usage?.total_tokens || entry.tokens || 0,
+                    tokens: entry.usage?.total_tokens || entry.usage?.input_tokens || 0,
                     cost: entry.cost || 0
                 }
             })

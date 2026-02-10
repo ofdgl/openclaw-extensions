@@ -15,57 +15,96 @@ export interface BillingEntry {
 }
 
 /**
- * Parse billing tracker logs
- * Assumes logs are in ~/.openclaw/logs/billing-tracker.log
- * Format: [timestamp] user:phone model:model_name input:N output:N tool:N cost:N session:session_id
+ * Parse billing data from session JSONL files
+ * Since billing-tracker.log doesn't exist, we extract usage data from session messages
+ * Session files are in ~/.openclaw/agents/main/sessions/*.jsonl
+ * Each message entry has: type:'message', message:{role}, and optionally usage info
  */
 export async function parseBillingLogs(limit = 1000): Promise<BillingEntry[]> {
     try {
-        const logPath = path.join(process.env.HOME || '/root', '.openclaw/logs/billing-tracker.log')
+        const sessionsDir = path.join(process.env.HOME || '/root', '.openclaw/agents/main/sessions')
+        const entries: BillingEntry[] = []
 
-        // Check if file exists first
+        let files: string[] = []
         try {
-            await fs.access(logPath)
+            files = (await fs.readdir(sessionsDir)).filter(f => f.endsWith('.jsonl') || f.endsWith('.json'))
         } catch {
-            // File doesn't exist yet - return empty array
-            console.log('Billing log not found, returning empty array')
             return []
         }
 
-        const content = await fs.readFile(logPath, 'utf-8')
+        for (const file of files) {
+            try {
+                const content = await fs.readFile(path.join(sessionsDir, file), 'utf-8')
+                const lines = content.trim().split('\n').filter(l => l.trim())
+                const sessionId = file.replace('.jsonl', '').replace('.json', '')
 
-        const lines = content.trim().split('\n').slice(-limit)
-        const entries: BillingEntry[] = []
+                // Get model from model_change entry
+                let sessionModel = 'unknown'
+                for (const line of lines) {
+                    try {
+                        const d = JSON.parse(line)
+                        if (d.type === 'model_change') {
+                            sessionModel = d.modelId || d.provider || 'unknown'
+                            break
+                        }
+                    } catch { }
+                }
 
-        for (const line of lines) {
-            const match = line.match(/\[(.*?)\] user:(.*?) phone:(.*?) model:(.*?) input:(\d+) output:(\d+) tool:(\d+) cost:([\d.]+) session:(.*?)$/)
+                // Extract assistant messages (they have token usage)
+                for (const line of lines) {
+                    try {
+                        const d = JSON.parse(line)
+                        if (d.type !== 'message') continue
 
-            if (match) {
-                entries.push({
-                    timestamp: match[1],
-                    user: match[2],
-                    phone: match[3],
-                    model: match[4],
-                    inputTokens: parseInt(match[5]),
-                    outputTokens: parseInt(match[6]),
-                    toolTokens: parseInt(match[7]),
-                    totalTokens: parseInt(match[5]) + parseInt(match[6]) + parseInt(match[7]),
-                    cost: parseFloat(match[8]),
-                    session: match[9],
-                })
-            }
+                        const role = d.message?.role || ''
+                        if (role !== 'assistant') continue
+
+                        // Extract usage info
+                        const usage = d.usage || d.message?.usage || {}
+                        const inputTokens = usage.input_tokens || usage.prompt_tokens || 0
+                        const outputTokens = usage.output_tokens || usage.completion_tokens || 0
+                        const cacheRead = usage.cache_read_input_tokens || 0
+                        const cacheCreation = usage.cache_creation_input_tokens || 0
+                        const totalTokens = inputTokens + outputTokens + cacheRead + cacheCreation
+
+                        // Estimate cost (rough pricing)
+                        let costPer1k = 0.003 // Default
+                        if (sessionModel.includes('sonnet-4-5')) costPer1k = 0.015
+                        else if (sessionModel.includes('sonnet-4')) costPer1k = 0.003
+                        else if (sessionModel.includes('haiku')) costPer1k = 0.001
+                        else if (sessionModel.includes('opus')) costPer1k = 0.075
+                        else if (sessionModel.includes('gemini')) costPer1k = 0.001
+                        else if (sessionModel.includes('gpt-4o')) costPer1k = 0.005
+
+                        const cost = (totalTokens / 1000) * costPer1k
+
+                        entries.push({
+                            timestamp: d.timestamp || new Date().toISOString(),
+                            user: 'User',
+                            phone: '',
+                            model: sessionModel,
+                            inputTokens,
+                            outputTokens,
+                            toolTokens: 0,
+                            totalTokens,
+                            cost,
+                            session: sessionId.slice(0, 8)
+                        })
+                    } catch { }
+                }
+            } catch { }
         }
 
-        return entries.reverse() // Most recent first
+        // Sort by timestamp descending
+        entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+
+        return entries.slice(0, limit)
     } catch (error) {
-        console.error('Error parsing billing logs:', error)
+        console.error('Error parsing session data for billing:', error)
         return []
     }
 }
 
-/**
- * Get cost summary for a time period
- */
 export async function getCostSummary(period: 'daily' | 'weekly' | 'monthly' = 'daily') {
     const entries = await parseBillingLogs()
 
@@ -81,7 +120,6 @@ export async function getCostSummary(period: 'daily' | 'weekly' | 'monthly' = 'd
     const totalTokens = filtered.reduce((sum, e) => sum + e.totalTokens, 0)
     const totalCost = filtered.reduce((sum, e) => sum + e.cost, 0)
 
-    // Model breakdown
     const byModel: Record<string, { tokens: number; cost: number; count: number }> = {}
     filtered.forEach(e => {
         if (!byModel[e.model]) byModel[e.model] = { tokens: 0, cost: 0, count: 0 }
@@ -96,13 +134,10 @@ export async function getCostSummary(period: 'daily' | 'weekly' | 'monthly' = 'd
         totalCost,
         requestCount: filtered.length,
         byModel,
-        entries: filtered.slice(0, 100) // Last 100 for display
+        entries: filtered.slice(0, 100)
     }
 }
 
-/**
- * Get activity heatmap (hour x day)
- */
 export async function getActivityHeatmap(days = 7) {
     const entries = await parseBillingLogs()
 
@@ -111,7 +146,6 @@ export async function getActivityHeatmap(days = 7) {
 
     const filtered = entries.filter(e => new Date(e.timestamp) >= cutoff)
 
-    // Initialize 7 days x 24 hours grid
     const heatmap = Array.from({ length: days }, () => Array(24).fill(0))
 
     filtered.forEach(e => {
