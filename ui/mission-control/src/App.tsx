@@ -13,9 +13,10 @@ import Contacts from './components/Contacts'
 import LogViewer from './components/LogViewer'
 import MemoryBrowser from './components/MemoryBrowser'
 import CronTasks from './components/CronTasks'
+import SecurityMonitor from './components/SecurityMonitor'
 import AccessGuard from './components/AccessGuard'
 
-export type Page = 'dashboard' | 'cost' | 'tokens' | 'terminal' | 'settings' | 'sessions' | 'agents' | 'hooks' | 'contacts' | 'logs' | 'memory' | 'cron'
+export type Page = 'dashboard' | 'cost' | 'tokens' | 'terminal' | 'settings' | 'sessions' | 'agents' | 'hooks' | 'contacts' | 'logs' | 'memory' | 'cron' | 'security'
 
 function App() {
   const [activePage, setActivePage] = useState<Page>('dashboard')
@@ -38,6 +39,7 @@ function App() {
       case 'settings': return <Settings />
       case 'memory': return <MemoryBrowser />
       case 'cron': return <CronTasks />
+      case 'security': return <SecurityMonitor />
       default: return <Dashboard />
     }
   }

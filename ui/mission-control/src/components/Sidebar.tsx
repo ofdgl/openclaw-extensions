@@ -11,7 +11,8 @@ import {
     ScrollText,
     FolderOpen,
     Clock,
-    CheckCircle
+    CheckCircle,
+    Shield
 } from 'lucide-react'
 import type { Page } from '../App'
 
@@ -48,6 +49,7 @@ const menuSections = [
     {
         title: 'System',
         items: [
+            { id: 'security' as Page, label: 'Security', icon: Shield },
             { id: 'settings' as Page, label: 'Settings', icon: SettingsIcon },
             { id: 'memory' as Page, label: 'Memory', icon: FolderOpen },
             { id: 'cron' as Page, label: 'Cron Jobs', icon: Clock },
@@ -82,8 +84,8 @@ export default function Sidebar({ activePage, setActivePage }: SidebarProps) {
                                         <button
                                             onClick={() => setActivePage(item.id)}
                                             className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${isActive
-                                                    ? 'bg-kamino-accent text-white'
-                                                    : 'text-gray-400 hover:bg-kamino-700 hover:text-white'
+                                                ? 'bg-kamino-accent text-white'
+                                                : 'text-gray-400 hover:bg-kamino-700 hover:text-white'
                                                 }`}
                                         >
                                             <Icon size={16} />
