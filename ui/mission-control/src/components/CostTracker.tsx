@@ -1,38 +1,84 @@
+import { useState, useEffect } from 'react'
 import { TrendingUp, DollarSign, AlertTriangle, BarChart3 } from 'lucide-react'
+import { API_BASE_URL, API_KEY } from '../config/api'
 
-// Mock daily cost data
-const dailyCosts = [
-    { day: 'Pzt', cost: 3.20, tokens: 98000 },
-    { day: 'Sal', cost: 4.80, tokens: 145000 },
-    { day: 'Çar', cost: 2.10, tokens: 67000 },
-    { day: 'Per', cost: 6.50, tokens: 201000 },
-    { day: 'Cum', cost: 1.90, tokens: 54000 },
-    { day: 'Cmt', cost: 0.80, tokens: 23000 },
-    { day: 'Paz', cost: 2.34, tokens: 72000 },
-]
+interface CostSummary {
+    daily: { day: string; cost: number; tokens: number }[]
+    weekly: { total: number; avg: number }
+    lifetime: { total: number; days: number }
+    models: { model: string; cost: number; percentage: number; tokens: number; color: string }[]
+    sessions: { session: string; cost: number; requests: number }[]
+}
 
-const modelBreakdown = [
-    { model: 'Claude Sonnet', cost: 14.20, percentage: 65, tokens: 432000, color: 'bg-orange-500' },
-    { model: 'Gemini Flash', cost: 0.00, percentage: 20, tokens: 128000, color: 'bg-blue-500' },
-    { model: 'OpenRouter Free', cost: 0.00, percentage: 10, tokens: 64000, color: 'bg-green-500' },
-    { model: 'Claude Haiku', cost: 1.20, percentage: 5, tokens: 36000, color: 'bg-purple-500' },
-]
-
-const topSessions = [
-    { session: 'main-agent', cost: 12.40, requests: 89 },
-    { session: 'coder-agent', cost: 2.80, requests: 23 },
-    { session: 'guest-agent', cost: 0.00, requests: 145 },
-]
-
-// Mock heatmap data (24 hours x 7 days)
-const heatmapData = Array.from({ length: 7 }, () =>
-    Array.from({ length: 24 }, () => Math.floor(Math.random() * 100))
-)
-const days = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz']
+interface HeatmapData {
+    heatmap: number[][]
+    days: string[]
+}
 
 export default function CostTracker() {
-    const weeklyTotal = dailyCosts.reduce((s, d) => s + d.cost, 0)
-    const dailyAvg = weeklyTotal / 7
+    const [summary, setSummary] = useState<CostSummary | null>(null)
+    const [heatmap, setHeatmap] = useState<HeatmapData | null>(null)
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [summaryRes, heatmapRes] = await Promise.all([
+                    fetch(`${API_BASE_URL}/api/costs/summary?key=${API_KEY}`),
+                    fetch(`${API_BASE_URL}/api/costs/heatmap?key=${API_KEY}`)
+                ])
+
+                if (summaryRes.ok) {
+                    const data = await summaryRes.json()
+                    setSummary(data)
+                }
+
+                if (heatmapRes.ok) {
+                    const data = await heatmapRes.json()
+                    setHeatmap(data)
+                }
+            } catch (error) {
+                console.error('Failed to fetch cost data:', error)
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        fetchData()
+        const interval = setInterval(fetchData, 60000) // Refresh every minute
+        return () => clearInterval(interval)
+    }, [])
+
+    if (loading) {
+        return (
+            <div className="p-6 flex items-center justify-center h-full">
+                <div className="text-gray-400">Loading cost data...</div>
+            </div>
+        )
+    }
+
+    if (!summary) {
+        return (
+            <div className="p-6 flex flex-col items-center justify-center h-full gap-4">
+                <div className="text-center max-w-md">
+                    <div className="text-6xl mb-4">⚠️</div>
+                    <h2 className="text-2xl font-bold text-white mb-2">API Connection Failed</h2>
+                    <p className="text-gray-400 mb-4">
+                        Cannot fetch cost data from <code className="text-kamino-accent">{API_BASE_URL}</code>
+                    </p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="mt-4 px-4 py-2 bg-kamino-accent rounded-lg text-white hover:bg-blue-600"
+                    >
+                        Retry Connection
+                    </button>
+                </div>
+            </div>
+        )
+    }
+
+    const dailyAvg = summary.weekly.avg
+    const weeklyTotal = summary.weekly.total
 
     return (
         <div className="p-6 space-y-6">
@@ -40,7 +86,7 @@ export default function CostTracker() {
 
             {/* Budget Status */}
             <div className="grid grid-cols-4 gap-4">
-                <BudgetCard label="Bugün" value={2.34} limit={5} hardLimit={8} />
+                <BudgetCard label="Bugün" value={summary.daily[summary.daily.length - 1]?.cost || 0} limit={5} hardLimit={8} />
                 <BudgetCard label="Bu Hafta" value={weeklyTotal} limit={30} hardLimit={40} />
                 <div className="bg-kamino-800 rounded-lg p-4 border border-kamino-700">
                     <div className="text-sm text-gray-400">Günlük Ortalama</div>
@@ -48,8 +94,8 @@ export default function CostTracker() {
                 </div>
                 <div className="bg-kamino-800 rounded-lg p-4 border border-kamino-700">
                     <div className="text-sm text-gray-400">Lifetime</div>
-                    <div className="text-2xl font-bold text-white">$127.45</div>
-                    <div className="text-xs text-gray-500">45 gün</div>
+                    <div className="text-2xl font-bold text-white">${summary.lifetime.total.toFixed(2)}</div>
+                    <div className="text-xs text-gray-500">{summary.lifetime.days} gün</div>
                 </div>
             </div>
 
@@ -60,7 +106,7 @@ export default function CostTracker() {
                     Haftalık Maliyet
                 </h2>
                 <div className="flex items-end gap-3 h-40">
-                    {dailyCosts.map((d, i) => {
+                    {summary.daily.map((d, i) => {
                         const height = (d.cost / 8) * 100
                         const isOverSoft = d.cost > 5
                         const isOverHard = d.cost > 8
@@ -95,7 +141,7 @@ export default function CostTracker() {
                 <div className="bg-kamino-800 rounded-lg p-6 border border-kamino-700">
                     <h2 className="font-semibold text-white mb-4">Model Dağılımı</h2>
                     <div className="space-y-3">
-                        {modelBreakdown.map((m, i) => (
+                        {summary.models.map((m, i) => (
                             <div key={i}>
                                 <div className="flex justify-between text-sm mb-1">
                                     <span className="text-gray-300">{m.model}</span>
@@ -115,7 +161,7 @@ export default function CostTracker() {
                 <div className="bg-kamino-800 rounded-lg p-6 border border-kamino-700">
                     <h2 className="font-semibold text-white mb-4">Session Maliyetleri</h2>
                     <div className="space-y-3">
-                        {topSessions.map((s, i) => (
+                        {summary.sessions.map((s, i) => (
                             <div key={i} className="flex items-center justify-between p-3 bg-kamino-700/50 rounded-lg">
                                 <div>
                                     <div className="text-white font-medium">{s.session}</div>
@@ -133,33 +179,35 @@ export default function CostTracker() {
             </div>
 
             {/* Activity Heatmap */}
-            <div className="bg-kamino-800 rounded-lg p-6 border border-kamino-700">
-                <h2 className="font-semibold text-white mb-4">Aktivite Heatmap (Token Kullanımı)</h2>
-                <div className="space-y-1">
-                    {heatmapData.map((row, dayIdx) => (
-                        <div key={dayIdx} className="flex items-center gap-1">
-                            <span className="text-xs text-gray-500 w-8">{days[dayIdx]}</span>
-                            {row.map((val, hourIdx) => (
-                                <div
-                                    key={hourIdx}
-                                    className="w-3 h-3 rounded-sm"
-                                    style={{
-                                        backgroundColor: val === 0 ? '#1f2937' : `rgba(59, 130, 246, ${Math.min(val / 100, 1)})`,
-                                    }}
-                                    title={`${days[dayIdx]} ${hourIdx}:00 - ${val} tokens`}
-                                />
+            {heatmap && (
+                <div className="bg-kamino-800 rounded-lg p-6 border border-kamino-700">
+                    <h2 className="font-semibold text-white mb-4">Aktivite Heatmap (Token Kullanımı)</h2>
+                    <div className="space-y-1">
+                        {heatmap.heatmap.map((row, dayIdx) => (
+                            <div key={dayIdx} className="flex items-center gap-1">
+                                <span className="text-xs text-gray-500 w-8">{heatmap.days[dayIdx]}</span>
+                                {row.map((val, hourIdx) => (
+                                    <div
+                                        key={hourIdx}
+                                        className="w-3 h-3 rounded-sm"
+                                        style={{
+                                            backgroundColor: val === 0 ? '#1f2937' : `rgba(59, 130, 246, ${Math.min(val / 100, 1)})`,
+                                        }}
+                                        title={`${heatmap.days[dayIdx]} ${hourIdx}:00 - ${val} tokens`}
+                                    />
+                                ))}
+                            </div>
+                        ))}
+                        <div className="flex items-center gap-1 ml-8 mt-2">
+                            {[0, 6, 12, 18, 23].map(h => (
+                                <span key={h} className="text-[10px] text-gray-600" style={{ marginLeft: h === 0 ? 0 : `${(h - (h > 0 ? [0, 6, 12, 18][Math.floor(h / 6) - 1] || 0 : 0)) * 16 - 16}px` }}>
+                                    {h}:00
+                                </span>
                             ))}
                         </div>
-                    ))}
-                    <div className="flex items-center gap-1 ml-8 mt-2">
-                        {[0, 6, 12, 18, 23].map(h => (
-                            <span key={h} className="text-[10px] text-gray-600" style={{ marginLeft: h === 0 ? 0 : `${(h - (h > 0 ? [0, 6, 12, 18][Math.floor(h / 6) - 1] || 0 : 0)) * 16 - 16}px` }}>
-                                {h}:00
-                            </span>
-                        ))}
                     </div>
                 </div>
-            </div>
+            )}
         </div>
     )
 }
