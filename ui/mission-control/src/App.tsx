@@ -1,3 +1,4 @@
+```typescript
 import { useState } from 'react'
 import './App.css'
 import Sidebar from './components/Sidebar'
@@ -13,6 +14,7 @@ import Contacts from './components/Contacts'
 import LogViewer from './components/LogViewer'
 import MemoryBrowser from './components/MemoryBrowser'
 import CronTasks from './components/CronTasks'
+import AccessGuard from './components/AccessGuard'
 
 export type Page = 'dashboard' | 'cost' | 'tokens' | 'terminal' | 'settings' | 'sessions' | 'agents' | 'hooks' | 'contacts' | 'logs' | 'memory' | 'cron'
 
@@ -42,13 +44,16 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen bg-kamino-900">
-      <Sidebar activePage={activePage} setActivePage={setActivePage} />
-      <main className="flex-1 overflow-auto">
-        {renderPage()}
-      </main>
-    </div>
+    <AccessGuard>
+      <div className="flex h-screen bg-kamino-900">
+        <Sidebar activePage={activePage} setActivePage={setActivePage} />
+        <main className="flex-1 overflow-auto">
+          {renderPage()}
+        </main>
+      </div>
+    </AccessGuard>
   )
 }
 
 export default App
+```
