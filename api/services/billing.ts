@@ -22,6 +22,16 @@ export interface BillingEntry {
 export async function parseBillingLogs(limit = 1000): Promise<BillingEntry[]> {
     try {
         const logPath = path.join(process.env.HOME || '/root', '.openclaw/logs/billing-tracker.log')
+
+        // Check if file exists first
+        try {
+            await fs.access(logPath)
+        } catch {
+            // File doesn't exist yet - return empty array
+            console.log('Billing log not found, returning empty array')
+            return []
+        }
+
         const content = await fs.readFile(logPath, 'utf-8')
 
         const lines = content.trim().split('\n').slice(-limit)
