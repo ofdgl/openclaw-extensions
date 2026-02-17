@@ -129,7 +129,7 @@ function calculateCost(
 
 /**
  * Parse billing data from ALL agent session JSONL files
- * Scans ~/.openclaw/agents/*/sessions/*.jsonl
+ * Scans all agent session directories under ~/.openclaw/agents/
  */
 export async function parseBillingLogs(limit = 1000): Promise<BillingEntry[]> {
     try {
