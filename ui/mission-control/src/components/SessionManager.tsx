@@ -25,7 +25,7 @@ interface Message {
     role: string
     content: string
     timestamp: string
-    tokens?: number
+    tokens?: number | { input: number; output: number; cacheRead: number; total: number }
     cost?: number
 }
 
@@ -204,11 +204,14 @@ export default function SessionManager({ onNavigate }: SessionManagerProps) {
                                             </span>
                                         </div>
                                         <p className="text-sm text-gray-300 whitespace-pre-wrap">{msg.content}</p>
-                                        {msg.tokens ? (
-                                            <div className="text-xs text-gray-500 mt-1">
-                                                {msg.tokens} tokens{msg.cost ? ` • $${msg.cost.toFixed(4)}` : ''}
-                                            </div>
-                                        ) : null}
+                                        {msg.tokens ? (() => {
+                                            const tokenCount = typeof msg.tokens === 'number' ? msg.tokens : msg.tokens.total
+                                            return (
+                                                <div className="text-xs text-gray-500 mt-1">
+                                                    {tokenCount} tokens{msg.cost ? ` • $${msg.cost.toFixed(4)}` : ''}
+                                                </div>
+                                            )
+                                        })() : null}
                                     </div>
                                 ))
                             ) : (
