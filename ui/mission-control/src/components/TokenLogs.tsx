@@ -1,4 +1,4 @@
-import { Search, Filter, Download, Wrench, RotateCcw } from 'lucide-react'
+import { Search, Download, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { Page } from '../App'
 import { API_BASE_URL, API_KEY } from '../config/api'
@@ -11,10 +11,19 @@ interface TokenLog {
     id: string
     timestamp: string
     user: string
+    phone: string
     message: string
     model: string
     tokens: number
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens: number
+    cacheCreationTokens: number
     cost: number
+    role: string
+    channel: string
+    session: string
+    agentId: string
     thinking?: string
     tools?: string[]
     retries?: number
@@ -26,11 +35,12 @@ export default function TokenLogs({ onNavigate }: TokenLogsProps = {}) {
     const [error, setError] = useState(false)
     const [filter, setFilter] = useState('')
     const [modelFilter, setModelFilter] = useState('all')
+    const [selectedLog, setSelectedLog] = useState<TokenLog | null>(null)
 
     useEffect(() => {
         const fetchLogs = async () => {
             try {
-                const params = new URLSearchParams({ key: API_KEY, limit: '50' })
+                const params = new URLSearchParams({ key: API_KEY, limit: '100' })
                 if (modelFilter !== 'all') params.append('model', modelFilter)
 
                 const res = await fetch(`${API_BASE_URL}/api/logs/tokens?${params}`)
@@ -51,14 +61,15 @@ export default function TokenLogs({ onNavigate }: TokenLogsProps = {}) {
         }
 
         fetchLogs()
-        const interval = setInterval(fetchLogs, 10000) // Refresh every 10s
+        const interval = setInterval(fetchLogs, 10000)
         return () => clearInterval(interval)
     }, [modelFilter])
 
     const filteredLogs = logs.filter(log =>
         filter === '' ||
         log.user.toLowerCase().includes(filter.toLowerCase()) ||
-        log.message.toLowerCase().includes(filter.toLowerCase())
+        log.message.toLowerCase().includes(filter.toLowerCase()) ||
+        (log.phone && log.phone.includes(filter))
     )
 
     if (loading) {
@@ -99,7 +110,7 @@ export default function TokenLogs({ onNavigate }: TokenLogsProps = {}) {
                         <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                         <input
                             type="text"
-                            placeholder="Search user or message..."
+                            placeholder="Search user, message, phone..."
                             value={filter}
                             onChange={(e) => setFilter(e.target.value)}
                             className="pl-10 pr-4 py-2 bg-kamino-700 border border-kamino-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-kamino-accent"
@@ -151,6 +162,7 @@ export default function TokenLogs({ onNavigate }: TokenLogsProps = {}) {
                             <tr>
                                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">TIME</th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">USER</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">ROLE</th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">MESSAGE</th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">MODEL</th>
                                 <th className="px-4 py-3 text-right text-xs font-semibold text-gray-400">TOKENS</th>
@@ -159,12 +171,19 @@ export default function TokenLogs({ onNavigate }: TokenLogsProps = {}) {
                         </thead>
                         <tbody className="divide-y divide-kamino-700">
                             {filteredLogs.map((log) => (
-                                <tr key={log.id} className="hover:bg-kamino-700/50 transition-colors">
+                                <tr
+                                    key={log.id}
+                                    onClick={() => setSelectedLog(log)}
+                                    className="hover:bg-kamino-700/50 transition-colors cursor-pointer"
+                                >
                                     <td className="px-4 py-3 text-sm text-gray-400">
                                         {new Date(log.timestamp).toLocaleTimeString()}
                                     </td>
                                     <td className="px-4 py-3 text-sm text-white">{log.user}</td>
-                                    <td className="px-4 py-3 text-sm text-gray-300 max-w-md truncate">
+                                    <td className="px-4 py-3">
+                                        <RoleBadge role={log.role} />
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-300 max-w-xs truncate">
                                         {log.message}
                                     </td>
                                     <td className="px-4 py-3">
@@ -184,7 +203,94 @@ export default function TokenLogs({ onNavigate }: TokenLogsProps = {}) {
                     </table>
                 </div>
             </div>
+
+            {/* Detail Modal */}
+            {selectedLog && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setSelectedLog(null)}>
+                    <div className="bg-kamino-800 border border-kamino-600 rounded-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between p-4 border-b border-kamino-700">
+                            <h3 className="text-lg font-semibold text-white">Message Details</h3>
+                            <button onClick={() => setSelectedLog(null)} className="text-gray-400 hover:text-white">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-4 space-y-4">
+                            {/* Sender Info */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <InfoRow label="User" value={selectedLog.user} />
+                                <InfoRow label="Phone" value={selectedLog.phone || '—'} />
+                                <InfoRow label="Channel" value={selectedLog.channel || 'whatsapp'} />
+                                <InfoRow label="Role" value={selectedLog.role} />
+                                <InfoRow label="Agent" value={selectedLog.agentId || 'main'} />
+                                <InfoRow label="Session" value={selectedLog.session} />
+                                <InfoRow label="Model" value={selectedLog.model} />
+                                <InfoRow label="Time" value={new Date(selectedLog.timestamp).toLocaleString()} />
+                            </div>
+
+                            {/* Message Content */}
+                            <div>
+                                <div className="text-xs font-semibold text-gray-400 mb-1">MESSAGE CONTENT</div>
+                                <div className="bg-kamino-900 rounded-lg p-3 text-sm text-gray-200 whitespace-pre-wrap max-h-48 overflow-y-auto">
+                                    {selectedLog.message || '(empty)'}
+                                </div>
+                            </div>
+
+                            {/* Token Breakdown */}
+                            <div>
+                                <div className="text-xs font-semibold text-gray-400 mb-2">TOKEN BREAKDOWN</div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="bg-kamino-900 rounded-lg p-3 flex justify-between">
+                                        <span className="text-sm text-gray-400">Input</span>
+                                        <span className="text-sm text-white font-medium">{selectedLog.inputTokens?.toLocaleString() || 0}</span>
+                                    </div>
+                                    <div className="bg-kamino-900 rounded-lg p-3 flex justify-between">
+                                        <span className="text-sm text-gray-400">Output</span>
+                                        <span className="text-sm text-white font-medium">{selectedLog.outputTokens?.toLocaleString() || 0}</span>
+                                    </div>
+                                    <div className="bg-kamino-900 rounded-lg p-3 flex justify-between">
+                                        <span className="text-sm text-gray-400">Cache Read</span>
+                                        <span className="text-sm text-blue-400 font-medium">{selectedLog.cacheReadTokens?.toLocaleString() || 0}</span>
+                                    </div>
+                                    <div className="bg-kamino-900 rounded-lg p-3 flex justify-between">
+                                        <span className="text-sm text-gray-400">Cache Write</span>
+                                        <span className="text-sm text-blue-400 font-medium">{selectedLog.cacheCreationTokens?.toLocaleString() || 0}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Cost */}
+                            <div className="flex justify-between items-center bg-kamino-900 rounded-lg p-3">
+                                <span className="text-sm text-gray-400">Total Cost</span>
+                                <span className={`text-lg font-bold ${selectedLog.cost > 0 ? 'text-orange-400' : 'text-green-400'}`}>
+                                    {selectedLog.cost > 0 ? `$${selectedLog.cost.toFixed(6)}` : 'Free'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
+    )
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="bg-kamino-900 rounded-lg p-2">
+            <div className="text-xs text-gray-500">{label}</div>
+            <div className="text-sm text-white truncate">{value}</div>
+        </div>
+    )
+}
+
+function RoleBadge({ role }: { role: string }) {
+    const isUser = role === 'user'
+    return (
+        <span className={`text-xs px-2 py-1 rounded-full border ${isUser
+            ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+            : 'bg-purple-500/20 text-purple-400 border-purple-500/30'
+            }`}>
+            {isUser ? 'User' : 'AI'}
+        </span>
     )
 }
 

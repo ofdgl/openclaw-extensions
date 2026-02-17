@@ -35,6 +35,7 @@ export default function SessionManager({ onNavigate }: SessionManagerProps) {
     const [messages, setMessages] = useState<Message[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(false)
+    const [searchQuery, setSearchQuery] = useState('')
 
     useEffect(() => {
         const fetchSessions = async () => {
@@ -138,14 +139,32 @@ export default function SessionManager({ onNavigate }: SessionManagerProps) {
             <div className="grid grid-cols-2 gap-6">
                 {/* Sessions List */}
                 <div className="bg-kamino-800 rounded-lg border border-kamino-700">
-                    <div className="p-4 border-b border-kamino-700">
+                    <div className="p-4 border-b border-kamino-700 space-y-2">
                         <h2 className="font-semibold text-white">Active Sessions ({sessions.length})</h2>
+                        <input
+                            type="text"
+                            placeholder="Search by user, phone, session ID..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full px-3 py-2 bg-kamino-900 border border-kamino-600 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-kamino-accent"
+                        />
                     </div>
                     <div className="divide-y divide-kamino-700 max-h-[600px] overflow-y-auto">
-                        {sessions.length === 0 ? (
-                            <div className="p-8 text-center text-gray-500">No sessions found</div>
-                        ) : (
-                            sessions.map((session) => (
+                        {(() => {
+                            const filteredSessions = sessions.filter(s => {
+                                if (!searchQuery) return true
+                                const q = searchQuery.toLowerCase()
+                                return (
+                                    s.user.toLowerCase().includes(q) ||
+                                    (s.phone && s.phone.includes(q)) ||
+                                    s.id.toLowerCase().includes(q) ||
+                                    s.agent.toLowerCase().includes(q)
+                                )
+                            })
+                            if (filteredSessions.length === 0) {
+                                return <div className="p-8 text-center text-gray-500">{searchQuery ? 'No matching sessions' : 'No sessions found'}</div>
+                            }
+                            return filteredSessions.map((session) => (
                                 <div
                                     key={session.id}
                                     onClick={() => setSelectedSession(session.id)}
@@ -173,7 +192,7 @@ export default function SessionManager({ onNavigate }: SessionManagerProps) {
                                     </div>
                                 </div>
                             ))
-                        )}
+                        })()}
                     </div>
                 </div>
 

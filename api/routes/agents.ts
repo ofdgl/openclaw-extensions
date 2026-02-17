@@ -42,6 +42,25 @@ app.get('/', async (c) => {
         const seenIds = new Set<string>()
         const agents: any[] = []
 
+        // Helper: check SOUL.md at multiple possible paths
+        const checkSoul = async (agentId: string): Promise<{ hasSoul: boolean; soulName: string }> => {
+            const soulPaths = [
+                path.join(home, `.openclaw/agents/${agentId}/SOUL.md`),
+                path.join(home, `.openclaw/workspace-${agentId}/SOUL.md`),
+                path.join(home, '.openclaw/workspace/SOUL.md'),
+            ]
+            for (const sp of soulPaths) {
+                try {
+                    await fs.access(sp)
+                    const content = await fs.readFile(sp, 'utf-8')
+                    const firstLine = content.split('\n').find(l => l.trim().startsWith('#'))
+                    const soulName = firstLine ? firstLine.replace(/^#+\s*/, '').trim() : 'Loaded'
+                    return { hasSoul: true, soulName }
+                } catch { }
+            }
+            return { hasSoul: false, soulName: '' }
+        }
+
         // First, add agents from agents.list config
         for (const agentDef of agentsList) {
             const id = agentDef.id || 'main'
@@ -57,6 +76,7 @@ app.get('/', async (c) => {
 
             const model = agentDef.model || defaultModel
             const status = sessionCount > 0 ? 'active' : 'idle'
+            const soul = await checkSoul(id)
 
             agents.push({
                 id,
@@ -65,6 +85,8 @@ app.get('/', async (c) => {
                 workspace: agentDef.workspace || `~/.openclaw/workspace-${id}`,
                 model: typeof model === 'string' ? model : model?.primary || 'unknown',
                 sessions: sessionCount,
+                hasSoul: soul.hasSoul,
+                soulName: soul.soulName,
                 tools: agentDef.tools || {},
                 sandbox: agentDef.sandbox || {},
                 isDefault: agentDef.default || false,
@@ -96,6 +118,8 @@ app.get('/', async (c) => {
                 guest: 'Guest Agent'
             }
 
+            const soul = await checkSoul(dirName)
+
             agents.push({
                 id: dirName,
                 name: displayNames[dirName] || dirName.charAt(0).toUpperCase() + dirName.slice(1) + ' Agent',
@@ -103,6 +127,8 @@ app.get('/', async (c) => {
                 workspace: `~/.openclaw/workspace-${dirName}`,
                 model: typeof model === 'string' ? model : model?.primary || 'unknown',
                 sessions: sessionCount,
+                hasSoul: soul.hasSoul,
+                soulName: soul.soulName,
                 tools: entryConfig.tools || (dirName === 'main' ? 'all' : []),
                 sandbox: entryConfig.sandbox || false,
                 isDefault: dirName === 'main'

@@ -11,6 +11,7 @@ interface Agent {
     sessions: number
     outputs: number
     hasSoul: boolean
+    soulName: string
     tools: string | string[]
     sandbox: boolean
 }
@@ -148,7 +149,7 @@ export default function AgentManager() {
 
                         <div className="space-y-1 text-sm text-gray-400">
                             <div>Sessions: <span className="text-white">{agent.sessions}</span></div>
-                            <div>SOUL: <span className={agent.hasSoul ? 'text-green-400' : 'text-gray-500'}>{agent.hasSoul ? '✓ Loaded' : '✗ None'}</span></div>
+                            <div>SOUL: <span className={agent.hasSoul ? 'text-green-400' : 'text-gray-500'}>{agent.hasSoul ? `✓ ${agent.soulName}` : '✗ None'}</span></div>
                             <div>Tools: <span className="text-white">{agent.tools === 'all' ? 'All' : Array.isArray(agent.tools) ? agent.tools.length : '0'}</span></div>
                             {agent.sandbox && <div className="text-yellow-400 text-xs">🔒 Sandboxed</div>}
                         </div>

@@ -14,6 +14,9 @@ export interface BillingEntry {
     cost: number
     session: string
     role: string
+    content: string
+    channel: string
+    agentId: string
 }
 
 // ============================================================
@@ -201,6 +204,18 @@ export async function parseBillingLogs(limit = 1000): Promise<BillingEntry[]> {
 
                             const cost = role === 'assistant' ? calculateCost(sessionModel, inputTokens, outputTokens, cacheRead, cacheCreation) : 0
 
+                            // Extract message text content
+                            const msgContent = d.message?.content
+                            let textContent = ''
+                            if (Array.isArray(msgContent)) {
+                                textContent = msgContent
+                                    .filter((p: any) => p.type === 'text')
+                                    .map((p: any) => p.text)
+                                    .join('\n')
+                            } else if (typeof msgContent === 'string') {
+                                textContent = msgContent
+                            }
+
                             entries.push({
                                 timestamp: d.timestamp || new Date().toISOString(),
                                 user: senderName,
@@ -213,7 +228,10 @@ export async function parseBillingLogs(limit = 1000): Promise<BillingEntry[]> {
                                 totalTokens,
                                 cost,
                                 session: sessionId.slice(0, 8),
-                                role
+                                role,
+                                content: textContent.slice(0, 500),
+                                channel: d.commandSource || d.channel || '',
+                                agentId: agentId
                             })
                         } catch { }
                     }
