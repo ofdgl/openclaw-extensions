@@ -18,14 +18,19 @@ const app = new Hono()
 
 // CORS
 app.use('*', cors({
-    origin: ['http://localhost:5173', 'http://76.13.137.215'],
+    origin: ['https://kamino.xn--merfaruk-bua.com', 'http://localhost:5173', 'http://localhost:7891'],
     credentials: true,
 }))
 
 // Auth middleware
 app.use('/api/*', async (c, next) => {
-    const key = c.req.query('key')
-    const expectedKey = process.env.API_SECRET_KEY || 'dev-secret-key'
+    const key = c.req.header('X-API-Key') || c.req.query('key')
+    const expectedKey = process.env.API_SECRET_KEY
+
+    if (!expectedKey) {
+        console.error('⚠️ API_SECRET_KEY not set! All requests will be rejected.')
+        return c.json({ error: 'Server misconfigured' }, 500)
+    }
 
     if (key !== expectedKey) {
         return c.json({ error: 'Unauthorized' }, 401)

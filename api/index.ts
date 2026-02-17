@@ -1,7 +1,7 @@
 import { serve } from '@hono/node-server'
 import app from './server'
 
-const port = 3001
+const port = 9347
 
 console.log(`🚀 Kamino Mission Control API starting on port ${port}...`)
 
