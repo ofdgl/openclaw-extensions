@@ -18,7 +18,7 @@ const app = new Hono()
 
 // CORS
 app.use('*', cors({
-    origin: ['https://kamino.xn--merfaruk-bua.com', 'http://localhost:5173', 'http://localhost:7891'],
+    origin: ['https://kamino.xn--merfaruk-m4a.com', 'http://localhost:5173', 'http://localhost:7891'],
     credentials: true,
 }))
 
