@@ -12,6 +12,7 @@ import { cronRoutes } from './routes/cron'
 import { terminalRoutes } from './routes/terminal'
 import { logviewerRoutes } from './routes/logviewer'
 import { securityRoutes } from './routes/security'
+import { routingRoutes } from './routes/routing'
 
 const app = new Hono()
 
@@ -48,5 +49,6 @@ app.route('/api/cron', cronRoutes)
 app.route('/api/terminal', terminalRoutes)
 app.route('/api/logviewer', logviewerRoutes)
 app.route('/api/security', securityRoutes)
+app.route('/api/routing', routingRoutes)
 
 export default app

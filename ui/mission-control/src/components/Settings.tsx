@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { Shield, Users, Zap, Database, Save, RefreshCw } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Shield, Users, Zap, Database, Save, RefreshCw, Terminal as TerminalIcon } from 'lucide-react'
+import { API_BASE_URL, API_KEY } from '../config/api'
 
 // Mock settings data
 const initialSettings = {
@@ -17,17 +18,44 @@ const initialSettings = {
         { name: 'Ömer', phone: '+905357874261', category: 'admin' },
         { name: 'Ekrem', phone: '+905070364656', category: 'trusted' },
         { name: 'Furkan', phone: '+905306310567', category: 'guest' },
-    ]
+    ],
+    terminalWhitelist: false,
 }
 
 export default function Settings() {
     const [settings, setSettings] = useState(initialSettings)
     const [saved, setSaved] = useState(false)
 
-    const handleSave = () => {
-        // TODO: Call API to save settings
-        setSaved(true)
-        setTimeout(() => setSaved(false), 2000)
+    useEffect(() => {
+        // Load terminal whitelist setting from API
+        fetch(`${API_BASE_URL}/api/routing/settings?key=${API_KEY}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.terminalWhitelist) {
+                    setSettings(prev => ({
+                        ...prev,
+                        terminalWhitelist: data.terminalWhitelist.enabled ?? false
+                    }))
+                }
+            })
+            .catch(() => { })
+    }, [])
+
+    const handleSave = async () => {
+        try {
+            await fetch(`${API_BASE_URL}/api/routing/settings?key=${API_KEY}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    terminalWhitelist: { enabled: settings.terminalWhitelist },
+                    autoRefresh: { enabled: true, interval: 30 }
+                })
+            })
+            setSaved(true)
+            setTimeout(() => setSaved(false), 2000)
+        } catch {
+            alert('Failed to save settings')
+        }
     }
 
     const toggleHook = (hook: keyof typeof settings.hooks) => {
@@ -45,8 +73,8 @@ export default function Settings() {
                 <button
                     onClick={handleSave}
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${saved
-                            ? 'bg-green-500 text-white'
-                            : 'bg-kamino-accent text-white hover:bg-blue-600'
+                        ? 'bg-green-500 text-white'
+                        : 'bg-kamino-accent text-white hover:bg-blue-600'
                         }`}
                 >
                     {saved ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
@@ -64,8 +92,8 @@ export default function Settings() {
                     <button
                         onClick={() => setSettings(prev => ({ ...prev, mode: 'kamino', dmPolicy: 'open' }))}
                         className={`p-4 rounded-lg border transition-colors ${settings.mode === 'kamino'
-                                ? 'border-purple-500 bg-purple-500/10'
-                                : 'border-kamino-700 hover:border-kamino-600'
+                            ? 'border-purple-500 bg-purple-500/10'
+                            : 'border-kamino-700 hover:border-kamino-600'
                             }`}
                     >
                         <div className="flex items-center gap-2 mb-2">
@@ -79,8 +107,8 @@ export default function Settings() {
                     <button
                         onClick={() => setSettings(prev => ({ ...prev, mode: 'original', dmPolicy: 'pairing' }))}
                         className={`p-4 rounded-lg border transition-colors ${settings.mode === 'original'
-                                ? 'border-green-500 bg-green-500/10'
-                                : 'border-kamino-700 hover:border-kamino-600'
+                            ? 'border-green-500 bg-green-500/10'
+                            : 'border-kamino-700 hover:border-kamino-600'
                             }`}
                     >
                         <div className="flex items-center gap-2 mb-2">
@@ -90,6 +118,34 @@ export default function Settings() {
                         <p className="text-sm text-gray-400">
                             dmPolicy: pairing, admin only, maximum security
                         </p>
+                    </button>
+                </div>
+            </div>
+
+            {/* Terminal Security */}
+            <div className="bg-kamino-800 rounded-lg p-6 border border-kamino-700">
+                <div className="flex items-center gap-3 mb-4">
+                    <TerminalIcon size={20} className="text-orange-500" />
+                    <h2 className="text-lg font-semibold text-white">Terminal Security</h2>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-kamino-700/50 rounded-lg">
+                    <div>
+                        <div className="font-medium text-white">Command Whitelist</div>
+                        <div className="text-xs text-gray-500">
+                            {settings.terminalWhitelist
+                                ? 'Only pre-approved commands can be executed'
+                                : 'All commands allowed (dangerous patterns still blocked)'}
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => setSettings(prev => ({ ...prev, terminalWhitelist: !prev.terminalWhitelist }))}
+                        className={`relative w-12 h-6 rounded-full transition-colors ${settings.terminalWhitelist ? 'bg-orange-500' : 'bg-kamino-600'
+                            }`}
+                    >
+                        <div
+                            className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${settings.terminalWhitelist ? 'left-7' : 'left-1'
+                                }`}
+                        />
                     </button>
                 </div>
             </div>

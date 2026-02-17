@@ -10,68 +10,104 @@ interface Session {
     phone: string
     agent: string
     model: string
+    channel: string
     createdAt: string
     lastActivity: string
     messageCount: number
+    totalTokens: number
 }
 
-// GET /api/sessions - List all sessions
+// GET /api/sessions - List all sessions from ALL agents
 app.get('/', async (c) => {
     try {
-        const sessionsDir = path.join(process.env.HOME || '/root', '.openclaw/agents/main/sessions')
+        const agentsBase = path.join(process.env.HOME || '/root', '.openclaw/agents')
+        const sessions: Session[] = []
 
+        let agentDirs: string[] = []
         try {
-            await fs.access(sessionsDir)
+            agentDirs = await fs.readdir(agentsBase)
         } catch {
             return c.json({ sessions: [] })
         }
 
-        const files = await fs.readdir(sessionsDir)
-        const jsonFiles = files.filter(f => f.endsWith('.json') || f.endsWith('.jsonl'))
-
-        const sessions: Session[] = []
-
-        for (const file of jsonFiles.slice(0, 50)) {
+        for (const agentId of agentDirs) {
+            const sessionsDir = path.join(agentsBase, agentId, 'sessions')
+            let files: string[] = []
             try {
-                const filePath = path.join(sessionsDir, file)
-                const content = await fs.readFile(filePath, 'utf-8')
-                const lines = content.trim().split('\n').filter(l => l.trim())
+                files = (await fs.readdir(sessionsDir)).filter(f => f.endsWith('.jsonl'))
+            } catch { continue }
 
-                const entries = lines.map(l => {
-                    try { return JSON.parse(l) } catch { return null }
-                }).filter(Boolean)
+            for (const file of files.slice(0, 50)) {
+                try {
+                    const filePath = path.join(sessionsDir, file)
+                    const content = await fs.readFile(filePath, 'utf-8')
+                    const lines = content.trim().split('\n').filter(l => l.trim())
 
-                if (entries.length === 0) continue
+                    const entries = lines.map(l => {
+                        try { return JSON.parse(l) } catch { return null }
+                    }).filter(Boolean)
 
-                // Session metadata is first line with type:'session'
-                const sessionMeta = entries.find((e: any) => e.type === 'session')
-                // Model info from model_change entry
-                const modelEntry = entries.find((e: any) => e.type === 'model_change')
-                // Actual messages have type:'message'
-                const messages = entries.filter((e: any) => e.type === 'message')
+                    if (entries.length === 0) continue
 
-                // Extract user info from first user message
-                let userName = 'Unknown'
-                let phone = ''
-                const firstUserMsg = messages.find((m: any) => m.message?.role === 'user')
-                if (firstUserMsg) {
-                    // Try to get user name from message metadata
-                    userName = firstUserMsg.senderName || firstUserMsg.pushName || firstUserMsg.from || 'User'
-                    phone = firstUserMsg.jid || firstUserMsg.phone || ''
+                    // Find session metadata
+                    const sessionMeta = entries.find((e: any) => e.type === 'session')
+                    const summaryEntry = entries.find((e: any) => e.type === 'summary')
+
+                    // Model info
+                    let model = 'unknown'
+                    const modelEntry = entries.find((e: any) => e.type === 'model_change')
+                    if (modelEntry) model = modelEntry.modelId || modelEntry.provider || 'unknown'
+                    if (summaryEntry?.model) model = summaryEntry.model
+
+                    // Count messages
+                    const messages = entries.filter((e: any) => e.type === 'message')
+
+                    // Extract user info from first user message
+                    let userName = 'Unknown'
+                    let phone = ''
+                    let channel = ''
+                    for (const msg of messages) {
+                        if (msg.message?.role === 'user') {
+                            userName = msg.senderName || msg.pushName || msg.from || 'User'
+                            phone = msg.senderId || msg.jid || msg.phone || ''
+                            channel = msg.commandSource || msg.channel || ''
+                            break
+                        }
+                    }
+                    // Also check session-level metadata
+                    if (!channel && sessionMeta) {
+                        channel = sessionMeta.lastChannel || sessionMeta.commandSource || ''
+                    }
+                    if (summaryEntry) {
+                        channel = channel || summaryEntry.lastChannel || ''
+                    }
+
+                    // Sum total tokens
+                    let totalTokens = 0
+                    for (const msg of messages) {
+                        const usage = msg.usage || msg.message?.usage || {}
+                        totalTokens += (usage.input_tokens || 0) + (usage.output_tokens || 0)
+                    }
+                    // Also check summary entry
+                    if (summaryEntry) {
+                        totalTokens = totalTokens || (summaryEntry.inputTokens || 0) + (summaryEntry.outputTokens || 0)
+                    }
+
+                    sessions.push({
+                        sessionId: file.replace('.jsonl', ''),
+                        user: userName,
+                        phone,
+                        agent: agentId,
+                        model,
+                        channel,
+                        createdAt: sessionMeta?.timestamp || entries[0]?.timestamp || new Date().toISOString(),
+                        lastActivity: entries[entries.length - 1]?.timestamp || new Date().toISOString(),
+                        messageCount: messages.length,
+                        totalTokens
+                    })
+                } catch (e) {
+                    console.error(`Failed to parse session file ${file}:`, e)
                 }
-
-                sessions.push({
-                    sessionId: file.replace('.json', '').replace('.jsonl', ''),
-                    user: userName,
-                    phone,
-                    agent: sessionMeta?.cwd?.includes('agents/') ? 'main-agent' : 'main-agent',
-                    model: modelEntry?.modelId || modelEntry?.provider || 'unknown',
-                    createdAt: sessionMeta?.timestamp || entries[0]?.timestamp || new Date().toISOString(),
-                    lastActivity: entries[entries.length - 1]?.timestamp || new Date().toISOString(),
-                    messageCount: messages.length
-                })
-            } catch (e) {
-                console.error(`Failed to parse session file ${file}:`, e)
             }
         }
 
@@ -87,17 +123,44 @@ app.get('/', async (c) => {
 })
 
 // GET /api/sessions/:id/messages - Get session conversation
+// Supports ?agent=main to specify which agent's sessions to look in
 app.get('/:id/messages', async (c) => {
     try {
         const sessionId = c.req.param('id')
-        const sessionsDir = path.join(process.env.HOME || '/root', '.openclaw/agents/main/sessions')
+        const agentId = c.req.query('agent') || 'main'
+        const agentsBase = path.join(process.env.HOME || '/root', '.openclaw/agents')
 
-        // Try .jsonl first, then .json
-        let filePath = path.join(sessionsDir, `${sessionId}.jsonl`)
-        try {
-            await fs.access(filePath)
-        } catch {
-            filePath = path.join(sessionsDir, `${sessionId}.json`)
+        // First try the specified agent, then search all agents
+        let filePath = ''
+        const tryPaths = [
+            path.join(agentsBase, agentId, 'sessions', `${sessionId}.jsonl`),
+        ]
+
+        // If not found in specified agent, search all
+        for (const tp of tryPaths) {
+            try {
+                await fs.access(tp)
+                filePath = tp
+                break
+            } catch { }
+        }
+
+        // Search all agents if not found
+        if (!filePath) {
+            let agentDirs: string[] = []
+            try { agentDirs = await fs.readdir(agentsBase) } catch { }
+            for (const ad of agentDirs) {
+                const fp = path.join(agentsBase, ad, 'sessions', `${sessionId}.jsonl`)
+                try {
+                    await fs.access(fp)
+                    filePath = fp
+                    break
+                } catch { }
+            }
+        }
+
+        if (!filePath) {
+            return c.json({ messages: [] })
         }
 
         const content = await fs.readFile(filePath, 'utf-8')
@@ -107,15 +170,23 @@ app.get('/:id/messages', async (c) => {
             try { return JSON.parse(l) } catch { return null }
         }).filter(Boolean)
 
+        // Find session model
+        let sessionModel = 'unknown'
+        for (const e of entries) {
+            if (e.type === 'model_change') {
+                sessionModel = e.modelId || e.provider || 'unknown'
+            } else if (e.type === 'summary') {
+                sessionModel = e.model || sessionModel
+            }
+        }
+
         // Only type:'message' entries are actual messages
         const messages = entries
             .filter((e: any) => e.type === 'message')
             .map((entry: any) => {
-                // Role from entry.message.role
                 const role = entry.message?.role || 'unknown'
 
                 // Content is in entry.message.content (NOT entry.content!)
-                // Format: [{type:'text', text:'...'}]
                 const msgContent = entry.message?.content
                 let textContent = ''
                 if (Array.isArray(msgContent)) {
@@ -127,11 +198,27 @@ app.get('/:id/messages', async (c) => {
                     textContent = msgContent
                 }
 
+                // Extract usage/tokens
+                const usage = entry.usage || entry.message?.usage || {}
+                const inputTokens = usage.input_tokens || usage.prompt_tokens || 0
+                const outputTokens = usage.output_tokens || usage.completion_tokens || 0
+                const cacheRead = usage.cache_read_input_tokens || 0
+                const totalTokens = inputTokens + outputTokens
+
                 return {
                     role,
                     content: textContent,
                     timestamp: entry.timestamp || new Date().toISOString(),
-                    tokens: entry.usage?.total_tokens || entry.usage?.input_tokens || 0,
+                    user: entry.senderName || entry.pushName || entry.from || '',
+                    phone: entry.senderId || entry.jid || '',
+                    channel: entry.commandSource || '',
+                    model: sessionModel,
+                    tokens: {
+                        input: inputTokens,
+                        output: outputTokens,
+                        cacheRead,
+                        total: totalTokens
+                    },
                     cost: entry.cost || 0
                 }
             })

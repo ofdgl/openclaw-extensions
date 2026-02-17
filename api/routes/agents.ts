@@ -19,88 +19,94 @@ const AVAILABLE_MODELS = [
 // GET /api/agents - List all agents with status
 app.get('/', async (c) => {
     try {
-        // Read from openclaw.json to get agent config
-        const configPath = path.join(process.env.HOME || '/root', '.openclaw/openclaw.json')
-        let agentConfig: any = {}
+        const home = process.env.HOME || '/root'
+        const configPath = path.join(home, '.openclaw/openclaw.json')
+        let config: any = {}
         try {
-            const configContent = await fs.readFile(configPath, 'utf-8')
-            const config = JSON.parse(configContent)
-            agentConfig = config.agents || {}
+            const content = await fs.readFile(configPath, 'utf-8')
+            config = JSON.parse(content)
         } catch { }
 
+        const agentConfig = config.agents || {}
+        const agentsList = agentConfig.list || []
+        const defaultModel = agentConfig.defaults?.model?.primary || agentConfig.defaults?.model || 'unknown'
+
         // Read agent directories
-        const agentsDir = path.join(process.env.HOME || '/root', '.openclaw/agents')
+        const agentsDir = path.join(home, '.openclaw/agents')
         let agentDirs: string[] = []
         try {
             agentDirs = await fs.readdir(agentsDir)
         } catch { }
 
-        // Also check SOULs directory for multi-agent definitions
-        const soulsDir = path.join(process.env.HOME || '/root', '.openclaw-active/souls')
-        let soulFiles: string[] = []
-        try {
-            soulFiles = (await fs.readdir(soulsDir)).filter(f => f.endsWith('.md')).map(f => f.replace('.md', ''))
-        } catch { }
+        // Merge: agents from config.agents.list + agent directories
+        const seenIds = new Set<string>()
+        const agents: any[] = []
 
-        // Merge agents from directories + souls
-        const allAgentIds = [...new Set([...agentDirs, ...soulFiles])]
-        const defaultModel = agentConfig.defaults?.model?.primary || agentConfig.defaults?.model || 'unknown'
+        // First, add agents from agents.list config
+        for (const agentDef of agentsList) {
+            const id = agentDef.id || 'main'
+            seenIds.add(id)
 
-        const agents = []
-
-        for (const agentId of allAgentIds) {
+            // Session count
+            let sessionCount = 0
             try {
-                const agentPath = path.join(agentsDir, agentId)
-                let isDir = false
-                try {
-                    const stat = await fs.stat(agentPath)
-                    isDir = stat.isDirectory()
-                } catch { }
+                const sessionsDir = path.join(agentsDir, id, 'sessions')
+                const sessionFiles = await fs.readdir(sessionsDir)
+                sessionCount = sessionFiles.filter((f: string) => f.endsWith('.jsonl')).length
+            } catch { }
 
-                // Session count
-                let sessionCount = 0
-                if (isDir) {
-                    try {
-                        const sessionsDir = path.join(agentPath, 'sessions')
-                        const sessionFiles = await fs.readdir(sessionsDir)
-                        sessionCount = sessionFiles.filter(f => f.endsWith('.json') || f.endsWith('.jsonl')).length
-                    } catch { }
-                }
+            const model = agentDef.model || defaultModel
+            const status = sessionCount > 0 ? 'active' : 'idle'
 
-                // Get model from agent config entries or defaults
-                const entryConfig = agentConfig.entries?.[agentId] || {}
-                const model = entryConfig.model || defaultModel
+            agents.push({
+                id,
+                name: agentDef.name || id.charAt(0).toUpperCase() + id.slice(1) + ' Agent',
+                status,
+                workspace: agentDef.workspace || `~/.openclaw/workspace-${id}`,
+                model: typeof model === 'string' ? model : model?.primary || 'unknown',
+                sessions: sessionCount,
+                tools: agentDef.tools || {},
+                sandbox: agentDef.sandbox || {},
+                isDefault: agentDef.default || false,
+                identity: agentDef.identity || {}
+            })
+        }
 
-                // Check for SOUL file
-                const hasSoul = soulFiles.includes(agentId)
+        // Then, add agents from directories not already in config
+        for (const dirName of agentDirs) {
+            if (seenIds.has(dirName)) continue
+            seenIds.add(dirName)
 
-                // Agent display names
-                const displayNames: Record<string, string> = {
-                    main: 'Main Agent',
-                    admin: 'Admin Agent',
-                    security: 'Security Agent',
-                    demo: 'Demo Agent',
-                    intern: 'Intern Agent',
-                    guest: 'Guest Agent'
-                }
+            let sessionCount = 0
+            try {
+                const sessionsDir = path.join(agentsDir, dirName, 'sessions')
+                const sessionFiles = await fs.readdir(sessionsDir)
+                sessionCount = sessionFiles.filter((f: string) => f.endsWith('.jsonl')).length
+            } catch { }
 
-                const status = sessionCount > 0 ? 'active' : hasSoul ? 'idle' : 'offline'
+            const entryConfig = agentConfig.entries?.[dirName] || {}
+            const model = entryConfig.model || defaultModel
 
-                agents.push({
-                    id: agentId,
-                    name: displayNames[agentId] || agentId,
-                    status,
-                    workspace: isDir ? agentPath : `~/.openclaw-kamino/workspaces/${agentId}`,
-                    model: typeof model === 'string' ? model : model?.primary || 'unknown',
-                    sessions: sessionCount,
-                    outputs: 0,
-                    hasSoul,
-                    tools: entryConfig.tools || (agentId === 'admin' ? 'all' : []),
-                    sandbox: entryConfig.sandbox || false
-                })
-            } catch (e) {
-                console.error(`Failed to process agent ${agentId}:`, e)
+            const displayNames: Record<string, string> = {
+                main: 'Main Agent',
+                admin: 'Admin Agent',
+                security: 'Security Agent',
+                demo: 'Demo Agent',
+                intern: 'Intern Agent',
+                guest: 'Guest Agent'
             }
+
+            agents.push({
+                id: dirName,
+                name: displayNames[dirName] || dirName.charAt(0).toUpperCase() + dirName.slice(1) + ' Agent',
+                status: sessionCount > 0 ? 'active' : 'idle',
+                workspace: `~/.openclaw/workspace-${dirName}`,
+                model: typeof model === 'string' ? model : model?.primary || 'unknown',
+                sessions: sessionCount,
+                tools: entryConfig.tools || (dirName === 'main' ? 'all' : []),
+                sandbox: entryConfig.sandbox || false,
+                isDefault: dirName === 'main'
+            })
         }
 
         return c.json({ agents, availableModels: AVAILABLE_MODELS })
@@ -110,8 +116,9 @@ app.get('/', async (c) => {
     }
 })
 
-// PATCH /api/agents/:id/model - Update default model in openclaw.json
-// Uses the correct path: agents.defaults.model.primary
+// PATCH /api/agents/:id/model - Update model for a SPECIFIC agent
+// If agentId === 'main' or no agents.list entry, update agents.defaults.model.primary
+// Otherwise, update the specific agents.list[].model
 app.patch('/:id/model', async (c) => {
     try {
         const agentId = c.req.param('id')
@@ -121,27 +128,40 @@ app.patch('/:id/model', async (c) => {
             return c.json({ error: 'Invalid model ID' }, 400)
         }
 
-        // Only allow known model IDs
-        const allowedPrefixes = ['anthropic/', 'google/', 'openai/', 'claude-', 'gemini-', 'gpt-']
-        const isValid = allowedPrefixes.some(p => model.startsWith(p))
-        if (!isValid) {
-            return c.json({ error: 'Unknown model provider' }, 400)
-        }
-
         const configPath = path.join(process.env.HOME || '/root', '.openclaw/openclaw.json')
         const content = await fs.readFile(configPath, 'utf-8')
         const config = JSON.parse(content)
 
-        // Set model at the correct path: agents.defaults.model.primary
         if (!config.agents) config.agents = {}
-        if (!config.agents.defaults) config.agents.defaults = {}
-        if (!config.agents.defaults.model) config.agents.defaults.model = {}
 
-        const oldModel = config.agents.defaults.model.primary || 'unknown'
-        config.agents.defaults.model.primary = model
+        let oldModel = 'unknown'
+
+        // Check if this agent is in agents.list
+        const agentsList = config.agents.list || []
+        const agentIndex = agentsList.findIndex((a: any) => a.id === agentId)
+
+        if (agentIndex >= 0) {
+            // Update specific agent in agents.list
+            oldModel = agentsList[agentIndex].model || 'unknown'
+            config.agents.list[agentIndex].model = model
+        } else if (agentId === 'main') {
+            // Update default model
+            if (!config.agents.defaults) config.agents.defaults = {}
+            if (!config.agents.defaults.model) config.agents.defaults.model = {}
+            oldModel = config.agents.defaults.model.primary || 'unknown'
+            config.agents.defaults.model.primary = model
+        } else {
+            // Create an entry in agents.list for this agent
+            if (!config.agents.list) config.agents.list = []
+            config.agents.list.push({
+                id: agentId,
+                model: model,
+                workspace: `~/.openclaw/workspace-${agentId}`
+            })
+        }
 
         await fs.writeFile(configPath, JSON.stringify(config, null, 2))
-        console.log(`Model changed: ${oldModel} -> ${model} (requested for agent: ${agentId})`)
+        console.log(`Model changed for ${agentId}: ${oldModel} -> ${model}`)
         return c.json({ success: true, agent: agentId, oldModel, model })
     } catch (error) {
         console.error('Failed to update agent model:', error)
@@ -158,13 +178,15 @@ app.get('/:id/outputs', (c) => {
 app.get('/:id/memory', async (c) => {
     try {
         const agentId = c.req.param('id')
+        const home = process.env.HOME || '/root'
 
         // Try multiple SOUL locations
         const soulPaths = [
-            path.join(process.env.HOME || '/root', `.openclaw-active/souls/${agentId}.md`),
-            path.join(process.env.HOME || '/root', `.openclaw-kamino/souls/${agentId}.md`),
-            path.join(process.env.HOME || '/root', `.openclaw/agents/${agentId}/SOUL.md`),
-            path.join(process.env.HOME || '/root', '.openclaw/workspace/SOUL.md'), // Main agent
+            path.join(home, `.openclaw/workspace-${agentId}/SOUL.md`),
+            path.join(home, `.openclaw-active/souls/${agentId}.md`),
+            path.join(home, `.openclaw-kamino/souls/${agentId}.md`),
+            path.join(home, `.openclaw/agents/${agentId}/SOUL.md`),
+            path.join(home, '.openclaw/workspace/SOUL.md'), // Main agent fallback
         ]
 
         let soul = ''

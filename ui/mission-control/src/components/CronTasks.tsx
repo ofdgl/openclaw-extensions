@@ -10,6 +10,7 @@ interface CronJob {
     lastRun: string | null
     nextRun: string | null
     agent: string
+    model?: string
     message?: string
     description?: string
 }
@@ -18,11 +19,12 @@ interface JobForm {
     name: string
     schedule: string
     agent: string
+    model: string
     message: string
     description: string
 }
 
-const emptyForm: JobForm = { name: '', schedule: '0 9 * * *', agent: 'main', message: '', description: '' }
+const emptyForm: JobForm = { name: '', schedule: '0 9 * * *', agent: 'main', model: '', message: '', description: '' }
 
 export default function CronTasks() {
     const [jobs, setJobs] = useState<CronJob[]>([])
@@ -129,6 +131,7 @@ export default function CronTasks() {
             name: job.name,
             schedule: job.schedule,
             agent: job.agent,
+            model: job.model || '',
             message: job.message || '',
             description: job.description || ''
         })
@@ -191,6 +194,21 @@ export default function CronTasks() {
                                 <option value="security">Security</option>
                                 <option value="demo">Demo</option>
                                 <option value="intern">Intern</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm text-gray-400 mb-1">Model (optional)</label>
+                            <select
+                                value={form.model}
+                                onChange={(e) => setForm({ ...form, model: e.target.value })}
+                                className="w-full bg-kamino-900 border border-kamino-700 rounded-lg px-3 py-2 text-white text-sm focus:border-kamino-accent outline-none"
+                            >
+                                <option value="">Default Model</option>
+                                <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                <option value="google/gemini-2.5-pro">Gemini 2.5 Pro</option>
+                                <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                                <option value="claude-3-5-haiku-20241022">Claude 3.5 Haiku</option>
+                                <option value="openai/gpt-4o">GPT-4o</option>
                             </select>
                         </div>
                         <div>
@@ -292,6 +310,15 @@ export default function CronTasks() {
                                 <div>Agent: <span className="text-white">{job.agent}</span></div>
                                 {job.description && (
                                     <div className="text-gray-500 italic">{job.description}</div>
+                                )}
+                                {job.model && (
+                                    <div>Model: <span className="text-cyan-400 font-mono text-xs">{job.model}</span></div>
+                                )}
+                                {job.message && (
+                                    <div className="mt-1">
+                                        <span className="text-gray-500">Prompt: </span>
+                                        <span className="text-gray-300 text-xs">{job.message.length > 80 ? job.message.slice(0, 80) + '...' : job.message}</span>
+                                    </div>
                                 )}
                                 {job.lastRun && (
                                     <div>Last Run: <span className="text-white">

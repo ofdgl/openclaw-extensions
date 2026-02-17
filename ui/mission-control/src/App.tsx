@@ -15,8 +15,9 @@ import MemoryBrowser from './components/MemoryBrowser'
 import CronTasks from './components/CronTasks'
 import SecurityMonitor from './components/SecurityMonitor'
 import AccessGuard from './components/AccessGuard'
+import RoutingConfig from './components/RoutingConfig'
 
-export type Page = 'dashboard' | 'cost' | 'tokens' | 'terminal' | 'settings' | 'sessions' | 'agents' | 'hooks' | 'contacts' | 'logs' | 'memory' | 'cron' | 'security'
+export type Page = 'dashboard' | 'cost' | 'tokens' | 'terminal' | 'settings' | 'sessions' | 'agents' | 'hooks' | 'contacts' | 'logs' | 'memory' | 'cron' | 'security' | 'routing'
 
 function App() {
   const [activePage, setActivePage] = useState<Page>('dashboard')
@@ -40,6 +41,7 @@ function App() {
       case 'memory': return <MemoryBrowser />
       case 'cron': return <CronTasks />
       case 'security': return <SecurityMonitor />
+      case 'routing': return <RoutingConfig />
       default: return <Dashboard />
     }
   }

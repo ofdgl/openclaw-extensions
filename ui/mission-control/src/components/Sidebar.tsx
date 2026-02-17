@@ -12,7 +12,8 @@ import {
     FolderOpen,
     Clock,
     CheckCircle,
-    Shield
+    Shield,
+    Network
 } from 'lucide-react'
 import type { Page } from '../App'
 
@@ -35,6 +36,7 @@ const menuSections = [
         items: [
             { id: 'sessions' as Page, label: 'Sessions', icon: MessageSquare },
             { id: 'agents' as Page, label: 'Agents', icon: Bot },
+            { id: 'routing' as Page, label: 'Routing', icon: Network },
             { id: 'terminal' as Page, label: 'Terminal', icon: TerminalIcon },
         ]
     },

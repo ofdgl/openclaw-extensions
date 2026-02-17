@@ -32,6 +32,7 @@ app.get('/jobs', async (c) => {
             lastRun: job.state?.lastRunAtMs ? new Date(job.state.lastRunAtMs).toISOString() : null,
             nextRun: job.state?.nextRunAtMs ? new Date(job.state.nextRunAtMs).toISOString() : null,
             agent: job.targetAgent || 'main',
+            model: job.model || '',
             message: job.message || '',
             description: job.description || ''
         }))
@@ -47,7 +48,7 @@ app.get('/jobs', async (c) => {
 app.post('/jobs', async (c) => {
     try {
         const body = await c.req.json()
-        const { name, schedule, message, agent, description } = body
+        const { name, schedule, message, agent, description, model } = body
 
         if (!name || !schedule) {
             return c.json({ error: 'Name and schedule are required' }, 400)
@@ -67,6 +68,7 @@ app.post('/jobs', async (c) => {
             schedule: { cron: schedule },
             enabled: true,
             targetAgent: agent || 'main',
+            model: model || '',
             message: message || '',
             description: description || '',
             state: {}
@@ -106,6 +108,7 @@ app.patch('/jobs/:id', async (c) => {
         if (body.enabled !== undefined) job.enabled = body.enabled
         if (body.message !== undefined) job.message = body.message
         if (body.agent !== undefined) job.targetAgent = body.agent
+        if (body.model !== undefined) job.model = body.model
         if (body.description !== undefined) job.description = body.description
 
         data.jobs[jobIndex] = job
