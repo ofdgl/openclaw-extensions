@@ -16,13 +16,22 @@ import CronTasks from './components/CronTasks'
 import SecurityMonitor from './components/SecurityMonitor'
 import AccessGuard from './components/AccessGuard'
 import RoutingConfig from './components/RoutingConfig'
+import ProjectManager from './components/ProjectManager'
 
-export type Page = 'dashboard' | 'cost' | 'tokens' | 'terminal' | 'settings' | 'sessions' | 'agents' | 'hooks' | 'contacts' | 'logs' | 'memory' | 'cron' | 'security' | 'routing'
+export type Page = 'dashboard' | 'cost' | 'tokens' | 'terminal' | 'settings' | 'sessions' | 'agents' | 'hooks' | 'contacts' | 'logs' | 'memory' | 'cron' | 'security' | 'routing' | 'projects'
+
+// Navigation context for cross-component linking
+export interface NavState {
+  filterAgent?: string
+  openFilePath?: string
+}
 
 function App() {
   const [activePage, setActivePage] = useState<Page>('dashboard')
+  const [navState, setNavState] = useState<NavState>({})
 
-  const handleNavigate = (page: Page) => {
+  const handleNavigate = (page: Page, state?: NavState) => {
+    setNavState(state || {})
     setActivePage(page)
   }
 
@@ -31,17 +40,18 @@ function App() {
       case 'dashboard': return <Dashboard />
       case 'cost': return <CostTracker />
       case 'tokens': return <TokenLogs onNavigate={handleNavigate} />
-      case 'sessions': return <SessionManager onNavigate={handleNavigate} />
-      case 'agents': return <AgentManager />
+      case 'sessions': return <SessionManager onNavigate={handleNavigate} filterAgent={navState.filterAgent} />
+      case 'agents': return <AgentManager onNavigate={handleNavigate} />
       case 'terminal': return <Terminal />
       case 'hooks': return <HookManager />
       case 'contacts': return <Contacts />
       case 'logs': return <LogViewer />
       case 'settings': return <Settings />
-      case 'memory': return <MemoryBrowser />
+      case 'memory': return <MemoryBrowser initialPath={navState.openFilePath} />
       case 'cron': return <CronTasks />
       case 'security': return <SecurityMonitor />
       case 'routing': return <RoutingConfig />
+      case 'projects': return <ProjectManager />
       default: return <Dashboard />
     }
   }

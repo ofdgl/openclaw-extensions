@@ -27,14 +27,17 @@ app.get('/jobs', async (c) => {
         const jobs = (data.jobs || []).map((job: any) => ({
             id: job.id,
             name: job.name || job.id,
-            schedule: job.schedule?.cron || '* * * * *',
+            schedule: job.schedule?.expr || job.schedule?.cron || '* * * * *',
             enabled: job.enabled !== false,
             lastRun: job.state?.lastRunAtMs ? new Date(job.state.lastRunAtMs).toISOString() : null,
             nextRun: job.state?.nextRunAtMs ? new Date(job.state.nextRunAtMs).toISOString() : null,
-            agent: job.targetAgent || 'main',
+            agent: job.agentId || job.targetAgent || 'main',
             model: job.model || '',
-            message: job.message || '',
-            description: job.description || ''
+            message: job.payload?.message || job.message || '',
+            description: job.description || job.name || '',
+            timezone: job.schedule?.tz || '',
+            sessionTarget: job.sessionTarget || '',
+            wakeMode: job.wakeMode || ''
         }))
 
         return c.json({ jobs })

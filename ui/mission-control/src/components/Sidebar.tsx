@@ -13,7 +13,8 @@ import {
     Clock,
     CheckCircle,
     Shield,
-    Network
+    Network,
+    Globe
 } from 'lucide-react'
 import type { Page } from '../App'
 
@@ -46,6 +47,7 @@ const menuSections = [
             { id: 'hooks' as Page, label: 'Hooks', icon: Plug },
             { id: 'contacts' as Page, label: 'Contacts', icon: Users },
             { id: 'logs' as Page, label: 'Log Viewer', icon: ScrollText },
+            { id: 'projects' as Page, label: 'Projects', icon: Globe },
         ]
     },
     {

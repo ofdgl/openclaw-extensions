@@ -2,10 +2,20 @@
 
 ## Overview
 
-OpenClaw Extensions (Kamino) implements a **multi-layered hook system** with **contact-based routing** and **multi-agent coordination** on top of OpenClaw Gateway.
+OpenClaw Extensions (Kamino) implements a **multi-layered hook system** with **contact-based routing** and **multi-agent coordination** on top of OpenClaw Gateway. It includes a **Mission Control web UI** for monitoring and control, served through **Cloudflare Workers** and **nginx** reverse proxy.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
+│                 Management Layer (Mission Control)           │
+│                                                              │
+│  Browser → Cloudflare Worker (kamino-proxy)                 │
+│          → nginx (IP allowlist + X-Kamino-Secret)           │
+│          → /mc/  → npx serve :7891 (React SPA)             │
+│          → /api/ → Hono API :9347 (REST + auth)            │
+│          → /openclaw/ → Gateway :18789                      │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ reads/writes OpenClaw data
+┌──────────────────────────┴──────────────────────────────────┐
 │                     WhatsApp / Telegram                      │
 └──────────────────────────┬──────────────────────────────────┘
                            ▼
@@ -30,19 +40,19 @@ OpenClaw Extensions (Kamino) implements a **multi-layered hook system** with **c
        ▼                 ▼                 ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    Agent Router                              │
-│  - Contact-based routing (routing.yaml)                     │
+│  - Contact-based routing (contacts.yaml)                    │
 │  - Admin → admin agent                                       │
-│  - Trusted → security agent                                  │
-│  - Unknown +90 → demo agent (sandbox)                        │
-│  - Other unknown → intern agent                              │
+│  - Trusted → main agent                                      │
+│  - Unknown +90 → guest workspace (sandbox)                   │
+│  - Blocked → rejected                                        │
 └──────────────────────────┬──────────────────────────────────┘
                            │
         ┌──────────────────┼──────────────────┐
         ▼                  ▼                  ▼
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│ Admin Agent  │  │Security Agent│  │  Demo Agent  │
-│ (Sonnet 4)   │  │  (Haiku)     │  │  (Haiku)     │
-│ Full access  │  │ Audit only   │  │  Sandbox     │
+│  Main Agent  │  │ Coder Agent  │  │  Guest Agent │
+│ (Sonnet 4.6) │  │ (Sonnet 4.6) │  │  (Haiku)     │
+│ Full access  │  │ Code-focused │  │  Sandbox     │
 └──────────────┘  └──────────────┘  └──────────────┘
 ```
 

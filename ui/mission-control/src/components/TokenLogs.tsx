@@ -1,10 +1,10 @@
 import { Search, Download, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import type { Page } from '../App'
+import type { Page, NavState } from '../App'
 import { API_BASE_URL, API_KEY } from '../config/api'
 
 interface TokenLogsProps {
-    onNavigate?: (page: Page, sessionId?: string) => void
+    onNavigate?: (page: Page, state?: NavState) => void
 }
 
 interface TokenLog {

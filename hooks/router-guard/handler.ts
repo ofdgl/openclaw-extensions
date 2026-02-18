@@ -1,11 +1,23 @@
 /**
- * Router Guard Hook
- * Filters messages based on country code (+90 only) and contact list.
- * Routes unknown +90 numbers to guest workspace with limited access.
+ * Router Guard Hook — Security Layer
+ * 
+ * Now that multi-agent routing is handled natively by OpenClaw bindings[],
+ * this hook focuses ONLY on security:
+ * 
+ * 1. Country filter — block non-+90 DMs (WhatsApp only)
+ * 2. Contact classification — admin/trusted/blocked
+ * 3. Blocked sender rejection
+ * 4. Logging
+ * 
+ * Agent routing is done by openclaw.json bindings:
+ *   - Coder group → coder agent (peer binding)
+ *   - Everything else → main agent (default)
+ *   - Unregistered groups → dropped by groupPolicy: allowlist
  */
 
 import * as fs from "fs";
-import * as path from "path";
+
+// ── Interfaces ──
 
 interface ContactList {
     admin?: string[];
@@ -30,30 +42,17 @@ interface HookEvent {
         workspaceDir?: string;
         bootstrapFiles?: BootstrapFile[];
         cfg?: any;
+        [key: string]: any;
     };
 }
 
+// ── Constants ──
+
 const TURKEY_PREFIX = "+90";
+const CONTACTS_PATH = "/root/.openclaw/workspace/memory/contacts.yaml";
 
-// Guest agent limited SOUL
-const GUEST_SOUL = `# Guest Mode
+// ── Contact Loading ──
 
-You are Kowalski's assistant in limited guest mode.
-
-## Rules
-- Be helpful but brief
-- Do not access files outside sandbox
-- Do not send messages to other contacts
-- Max 5 messages per conversation
-- If user needs more help, suggest they contact the admin
-
-## Personality
-Professional, helpful, concise.
-`;
-
-/**
- * Parse contacts.yaml with simple regex (no yaml dependency)
- */
 function parseContacts(content: string): ContactList {
     const contacts: ContactList = { admin: [], trusted: [], blocked: [] };
     const lines = content.split("\n");
@@ -65,77 +64,34 @@ function parseContacts(content: string): ContactList {
         else if (line.match(/^blocked:/)) currentKey = "blocked";
         else if (line.match(/^\s+-\s*["']?\+\d+/) && currentKey) {
             const num = line.match(/\+\d+/)?.[0];
-            if (num) {
-                contacts[currentKey]!.push(num);
-            }
+            if (num) contacts[currentKey]!.push(num);
         }
     }
     return contacts;
 }
 
-/**
- * Load contacts from workspace
- */
-function loadContacts(workspaceDir: string): ContactList {
-    const contactsPath = path.join(workspaceDir, "memory", "contacts.yaml");
-
+function loadContacts(): ContactList {
     try {
-        if (fs.existsSync(contactsPath)) {
-            const content = fs.readFileSync(contactsPath, "utf8");
-            return parseContacts(content);
+        if (fs.existsSync(CONTACTS_PATH)) {
+            return parseContacts(fs.readFileSync(CONTACTS_PATH, "utf8"));
         }
     } catch (err) {
         console.error("[router-guard] Failed to load contacts:", err);
     }
-
     return { admin: [], trusted: [], blocked: [] };
 }
 
 /**
- * Inject guest bootstrap files for unknown +90 users
- */
-function injectGuestBootstrap(event: HookEvent): void {
-    if (!event.context.bootstrapFiles) {
-        event.context.bootstrapFiles = [];
-    }
-
-    // Replace or add SOUL.md with guest version
-    const soulIndex = event.context.bootstrapFiles.findIndex(
-        f => f.path.endsWith("SOUL.md")
-    );
-
-    const guestSoulFile: BootstrapFile = {
-        path: "SOUL.md",
-        content: GUEST_SOUL
-    };
-
-    if (soulIndex >= 0) {
-        event.context.bootstrapFiles[soulIndex] = guestSoulFile;
-    } else {
-        event.context.bootstrapFiles.push(guestSoulFile);
-    }
-
-    // Add guest mode marker
-    event.context.bootstrapFiles.push({
-        path: "GUEST_MODE.md",
-        content: "# Guest Mode Active\nLimited tools and context."
-    });
-}
-
-/**
- * Block sender by clearing bootstrap files
+ * Block by clearing bootstrap files and messages — prevents any AI processing
  */
 function blockSender(event: HookEvent, reason: string): void {
-    console.log(`[router-guard] BLOCKED: ${event.context.senderId} (${reason})`);
-
-    if (event.context.bootstrapFiles) {
-        event.context.bootstrapFiles.length = 0;
-    }
+    console.log(`[router-guard] BLOCKED: ${event.context.senderId || "unknown"} (${reason})`);
+    if (event.context.bootstrapFiles) event.context.bootstrapFiles.length = 0;
+    if (event.messages) event.messages.length = 0;
 }
 
-/**
- * Main hook handler
- */
+// ── Main Handler ──
+
 const handler = async (event: HookEvent): Promise<void> => {
     // Only handle agent:bootstrap events
     if (event.type !== "agent" || event.action !== "bootstrap") return;
@@ -144,43 +100,40 @@ const handler = async (event: HookEvent): Promise<void> => {
     const channel = event.context?.commandSource;
 
     // Only filter WhatsApp messages
-    if (channel !== "whatsapp" || !senderId) return;
+    if (channel !== "whatsapp") return;
 
-    // Check country code - block non-Turkey numbers
+    // Groups are handled by native bindings + groupPolicy allowlist
+    // No need to filter here — unregistered groups never reach this hook
+    const isGroup = event.sessionKey.includes(":group:") || event.sessionKey.includes("@g.us");
+    if (isGroup) {
+        console.log(`[router-guard] GROUP: ${event.sessionKey} — routed by native binding`);
+        return;
+    }
+
+    // ── DM Security ──
+    if (!senderId) return;
+
+    // Country filter — only +90 (Turkey) allowed
     if (!senderId.startsWith(TURKEY_PREFIX)) {
-        blockSender(event, "not +90");
+        blockSender(event, `country filter: ${senderId.slice(0, 4)}...`);
         return;
     }
 
-    // Load contacts from workspace
-    const workspaceDir = event.context?.workspaceDir;
-    if (!workspaceDir) return;
+    const contacts = loadContacts();
 
-    const contacts = loadContacts(workspaceDir);
-
-    const isAdmin = contacts.admin?.includes(senderId);
-    const isTrusted = contacts.trusted?.includes(senderId);
-    const isBlocked = contacts.blocked?.includes(senderId);
-
-    // Block explicitly blocked numbers
-    if (isBlocked) {
-        blockSender(event, "in blocklist");
+    // Blocked contacts
+    if (contacts.blocked?.includes(senderId)) {
+        blockSender(event, "blocklist");
         return;
     }
 
-    // Route based on contact category
-    if (isAdmin) {
-        console.log(`[router-guard] ADMIN: ${senderId} → full access`);
-        // Admin gets full access, no modification needed
-
-    } else if (isTrusted) {
-        console.log(`[router-guard] TRUSTED: ${senderId} → main workspace`);
-        // Trusted gets main agent, tool filtering handled by context builder
-
+    // Classification logging
+    if (contacts.admin?.includes(senderId)) {
+        console.log(`[router-guard] ADMIN: ${senderId}`);
+    } else if (contacts.trusted?.includes(senderId)) {
+        console.log(`[router-guard] TRUSTED: ${senderId}`);
     } else {
-        console.log(`[router-guard] GUEST: ${senderId} → guest workspace`);
-        // Unknown +90 → inject guest bootstrap
-        injectGuestBootstrap(event);
+        console.log(`[router-guard] GUEST: ${senderId} (unknown +90)`);
     }
 };
 

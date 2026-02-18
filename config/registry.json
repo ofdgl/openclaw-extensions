@@ -1,0 +1,7 @@
+{
+    "projects": {},
+    "nextPort": 10001,
+    "settings": {
+        "defaultIdleTimeout": 3600
+    }
+}

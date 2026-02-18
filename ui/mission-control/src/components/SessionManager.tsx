@@ -1,10 +1,11 @@
 import { MessageSquare, Send } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import type { Page } from '../App'
+import type { Page, NavState } from '../App'
 import { API_BASE_URL, API_KEY } from '../config/api'
 
 interface SessionManagerProps {
-    onNavigate?: (page: Page) => void
+    onNavigate?: (page: Page, state?: NavState) => void
+    filterAgent?: string
 }
 
 interface Session {
@@ -29,13 +30,13 @@ interface Message {
     cost?: number
 }
 
-export default function SessionManager({ onNavigate }: SessionManagerProps) {
+export default function SessionManager({ onNavigate, filterAgent }: SessionManagerProps) {
     const [sessions, setSessions] = useState<Session[]>([])
     const [selectedSession, setSelectedSession] = useState<string | null>(null)
     const [messages, setMessages] = useState<Message[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(false)
-    const [searchQuery, setSearchQuery] = useState('')
+    const [searchQuery, setSearchQuery] = useState(filterAgent || '')
 
     useEffect(() => {
         const fetchSessions = async () => {
@@ -44,7 +45,6 @@ export default function SessionManager({ onNavigate }: SessionManagerProps) {
 
                 if (res.ok) {
                     const data = await res.json()
-                    // Map API response to UI format
                     const mapped = (data.sessions || []).map((s: any) => ({
                         id: s.sessionId || s.id,
                         user: s.user || 'Unknown',
@@ -101,7 +101,6 @@ export default function SessionManager({ onNavigate }: SessionManagerProps) {
         if (modelId.includes('sonnet-4')) return 'Sonnet 4'
         if (modelId.includes('haiku')) return 'Haiku 3.5'
         if (modelId.includes('opus')) return 'Opus 4'
-        // Try to get last part after /
         const parts = modelId.split('/')
         return parts[parts.length - 1] || modelId
     }

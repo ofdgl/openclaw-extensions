@@ -1,0 +1,14 @@
+{
+    "agents": {
+        "coder": {
+            "soulPath": "/root/.openclaw/agents/coder/SOUL.md",
+            "label": "Coder — Mühendis"
+        }
+    },
+    "groupRouting": {
+        "120363425477689226@g.us": {
+            "agentId": "coder",
+            "label": "Coder Agent WhatsApp Group"
+        }
+    }
+}

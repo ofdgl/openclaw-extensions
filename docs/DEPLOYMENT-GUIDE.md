@@ -1,102 +1,229 @@
 # VPS Deployment Guide
 
-This guide documents how to deploy openclaw-extensions hooks to a VPS running OpenClaw.
+This guide documents how to deploy OpenClaw Extensions (hooks, API, and Mission Control UI) to a VPS.
 
 ## Prerequisites
 
-- OpenClaw 2026.2.x installed on VPS
+- OpenClaw 2026.2.x installed on VPS (`openclaw-gateway` running)
 - SSH access to VPS
-- Git installed on VPS
+- Node.js 20+ on VPS
+- Cloudflare Worker deployed (kamino-proxy)
+- nginx installed on VPS
 
-## Quick Deploy
+---
+
+## Quick Deploy (Full Stack)
+
+### 1. Deploy Hooks
 
 ```bash
-# 1. Clone repository on VPS
-cd ~ && git clone https://github.com/ofdgl/openclaw-extensions.git
+# Copy hooks to OpenClaw hooks directory
+scp -i ~/.ssh/id_rsa_openclaw -r hooks/* root@VPS:/root/.openclaw/hooks/
 
-# 2. Copy hooks to OpenClaw hooks directory
-mkdir -p ~/.openclaw/hooks
-cp -r ~/openclaw-extensions/hooks/* ~/.openclaw/hooks/
-
-# 3. Verify hooks are discovered
-openclaw hooks check
-# Should show: Total hooks: 20, Ready: 20
-
-# 4. Enable desired hooks
-openclaw hooks enable router-guard
-openclaw hooks enable rate-limiter
-openclaw hooks enable secret-guard
-# ... enable other hooks as needed
-
-# 5. Restart gateway
-openclaw gateway restart
+# Verify on VPS
+ssh root@VPS "ls ~/.openclaw/hooks/"
 ```
+
+### 2. Deploy API
+
+```bash
+# Copy API source
+scp -i ~/.ssh/id_rsa_openclaw -r api/ root@VPS:/root/openclaw-extensions/api/
+
+# Create .env if first time
+ssh root@VPS "echo 'API_SECRET_KEY=your-secret-key' > /root/openclaw-extensions/api/.env"
+
+# Install dependencies
+ssh root@VPS "cd /root/openclaw-extensions/api && npm install"
+
+# Start / restart API
+ssh root@VPS "bash /root/restart-api.sh"
+```
+
+### 3. Deploy Mission Control UI
+
+```bash
+# Build locally
+cd ui/mission-control && npm run build
+
+# Deploy built files
+scp -i ~/.ssh/id_rsa_openclaw dist/index.html root@VPS:/root/openclaw-extensions/ui/mission-control/dist/
+scp -i ~/.ssh/id_rsa_openclaw -r dist/assets/* root@VPS:/root/openclaw-extensions/ui/mission-control/dist/assets/
+```
+
+### 4. Deploy nginx Config
+
+```bash
+scp -i ~/.ssh/id_rsa_openclaw kamino-proxy/nginx-kamino.conf \
+    root@VPS:/etc/nginx/sites-available/kamino.conf
+
+ssh root@VPS "ln -sf /etc/nginx/sites-available/kamino.conf /etc/nginx/sites-enabled/"
+ssh root@VPS "nginx -t && nginx -s reload"
+```
+
+### 5. Deploy Cloudflare Worker
+
+```bash
+cd kamino-proxy && npx wrangler deploy
+```
+
+---
+
+## VPS Process Table
+
+| Process | Port | PID Check | Start Command |
+|---------|------|-----------|---------------|
+| `openclaw-gateway` | 18789 | `pidof openclaw-gateway` | systemd / manual |
+| Hono API | 9347 | `ss -tlnp \| grep 9347` | `nohup npx tsx api/index.ts &` |
+| npx serve (UI) | 7891 | `ss -tlnp \| grep 7891` | `npx serve -s . -l 7891` |
+| nginx | 80 | `systemctl status nginx` | `systemctl start nginx` |
+
+---
+
+## nginx Configuration
+
+The nginx config (`nginx-kamino.conf`) does:
+
+1. **Cloudflare IP allowlist** — only Cloudflare IPs + localhost
+2. **X-Kamino-Secret verification** — server-level `if` check (not in location blocks due to "if is evil" pattern)
+3. **Proxy routing**:
+   - `/mc/` → `http://127.0.0.1:7891/` (UI static server)
+   - `/api/` → `http://127.0.0.1:9347/` (Hono API)
+   - `/openclaw/` → `http://127.0.0.1:48991/` (OpenClaw Gateway)
+   - `/health` → `http://127.0.0.1:9347/health` (health check, localhost only)
+
+> [!CAUTION]
+> Never use `if` + `proxy_pass` inside the same `location` block in nginx — it silently breaks proxying ("if is evil" pattern). The secret check MUST be at server level.
+
+---
 
 ## Hook Categories
 
 ### Security Hooks
-- `router-guard` - Routes messages based on content/sender rules
-- `secret-guard` - Prevents leaking sensitive info
-- `emergency-bypass` - Allows bypass on critical keywords
-- `security-reporter` - Weekly security reports
+- `router-guard` — Routes messages based on sender and contact category (contacts.yaml)
+- `secret-guard` — Redacts API keys from responses
+- `emergency-bypass` — `/o` command bypass for urgent messages
+- `security-reporter` — Periodic security audit reports
 
 ### Rate Limiting
-- `rate-limiter` - Per-user message limits
+- `rate-limiter` — Per-user daily token limits
 
 ### Multi-Agent
-- `handoff-manager` - Agent session transfers
-- `mention-notifier` - @mention notifications
+- `handoff-manager` — Agent escalation/handoff (Haiku → Sonnet → Opus)
+- `mention-notifier` — @mention notifications between agents
 
 ### Intelligence
-- `intent-classifier` - Classifies message intent
-- `context-optimizer` - Improves context usage
-- `loop-detector` - Prevents agent loops
+- `intent-classifier` — Classifies message intent (greeting, coding, etc.)
+- `context-optimizer` — Adjusts context window based on intent
+- `loop-detector` — Kills stuck agent sessions
 
 ### Automation
-- `backup-automator` - GitHub backup on /new command
-- `heartbeat-scheduler` - Scheduled health checks
-- `daily-standup` - Daily summary messages
+- `backup-automator` — Git backup on `/new` command
+- `heartbeat-scheduler` — Periodic scheduled tasks
+- `daily-standup` — Automated daily summary
 
-### Media
-- `image-processor` - Handles image messages
+### Analytics
+- `billing-tracker` — Token usage logging to billing.jsonl
+- `contact-enricher` — Enriches contact metadata from WhatsApp pushName
 
-### Billing
-- `billing-tracker` - Token usage tracking
+---
 
-## Updating Hooks
+## Updating Individual Components
 
+### API Only
 ```bash
-cd ~/openclaw-extensions
-git pull
-cp -r hooks/* ~/.openclaw/hooks/
-openclaw gateway restart
+scp -i ~/.ssh/id_rsa_openclaw api/server.ts root@VPS:/root/openclaw-extensions/api/server.ts
+ssh root@VPS "bash /root/restart-api.sh"
 ```
+
+### UI Only
+```bash
+cd ui/mission-control && npm run build
+scp -i ~/.ssh/id_rsa_openclaw dist/index.html root@VPS:/root/openclaw-extensions/ui/mission-control/dist/
+scp -i ~/.ssh/id_rsa_openclaw -r dist/assets/* root@VPS:/root/openclaw-extensions/ui/mission-control/dist/assets/
+```
+
+### Single Hook
+```bash
+scp -i ~/.ssh/id_rsa_openclaw -r hooks/router-guard/ root@VPS:/root/.openclaw/hooks/router-guard/
+```
+
+---
+
+## Restart Scripts
+
+### API Restart (restart-api.sh)
+```bash
+#!/bin/bash
+pkill -f "tsx.*index.ts" 2>/dev/null
+cd /root/openclaw-extensions/api
+nohup npx tsx index.ts > /tmp/api.log 2>&1 &
+echo "API started"
+```
+
+### Full Stack Restart
+```bash
+# Gateway
+systemctl restart openclaw 2>/dev/null || openclaw-gateway &
+
+# API
+bash /root/restart-api.sh
+
+# UI (auto-restarts if killed)
+cd /root/openclaw-extensions/ui/mission-control/dist
+npx serve -s . -l 7891 &
+
+# nginx
+nginx -s reload
+```
+
+---
+
+## Troubleshooting
+
+### MC Shows "Access Denied"
+- Browser may have cached old JS. Try **Ctrl+Shift+R** (hard refresh)
+- Check API key is correct: `curl http://localhost:9347/api/auth/check?key=YOUR_KEY`
+- Ensure `.env` file exists: `cat /root/openclaw-extensions/api/.env`
+
+### nginx Returns 403
+- Check `X-Kamino-Secret` header is sent by Worker
+- Verify Cloudflare IPs are up-to-date in nginx config
+- Check `nginx -t` for syntax errors
+- See logs: `tail /var/log/nginx/error.log`
+
+### API Not Responding
+- Check if running: `ss -tlnp | grep 9347`
+- Check logs: `cat /tmp/api.log`
+- Restart: `bash /root/restart-api.sh`
+
+### Hooks Not Triggering
+- Check hook exists: `ls ~/.openclaw/hooks/`
+- Verify `HOOK.md` and `handler.ts` are present
+- Check event type in HOOK.md matches expected events
+- Restart gateway after changes
+
+### Group Messages Not Received
+- Check `groupPolicy` in `openclaw.json` — must be `"open"` or group in allowlist
+- Group JID format: `120363XXXXX@g.us`
+
+---
 
 ## Verifying Installation
 
 ```bash
-# Check hook status
-openclaw hooks check
+# Check processes
+ss -tlnp | grep -E '7891|9347|18789|80'
 
-# Check gateway health
-openclaw gateway health
+# API health
+curl http://localhost:9347/health
 
-# View enabled hooks
-openclaw hooks list | grep enabled
+# API auth
+curl "http://localhost:9347/api/agents?key=YOUR_KEY"
+
+# UI serving
+curl -s http://localhost:7891/ | head -1
+
+# Through Cloudflare
+curl -s "https://kamino.ömerfaruk.com/api/api/auth/check?key=YOUR_KEY"
 ```
-
-## Troubleshooting
-
-### Hooks not appearing
-- Ensure HOOK.md exists in each hook folder
-- Check handler.ts exports default function
-- Run `openclaw hooks check` for errors
-
-### Gateway won't start
-- Run `openclaw doctor --fix`
-- Check logs: `journalctl -u openclaw-gateway -n 50`
-
-### Hook not triggering
-- Verify hook is enabled: `openclaw hooks enable <hook-name>`
-- Check event type in HOOK.md matches expected events
-- Restart gateway after enabling

@@ -1,22 +1,9 @@
 # Mission Control UI
 
-Web-based dashboard for monitoring and controlling the multi-agent system.
+Web-based dashboard for monitoring and controlling the OpenClaw multi-agent system.
 
----
-
-## Status
-
-**Phase**: Planning  
-**Priority**: Phase 2 (post-MVP)  
-**Current**: No UI code yet (hook-based CLI only)
-
----
-
-## Overview
-
-Mission Control UI will be a **real-time web dashboard** separate from OpenClaw's `/_admin` interface, specifically designed for the multi-agent orchestration system.
-
-**URL**: `http://your-vps:3001/mission-control`
+**URL**: `https://kamino.ömerfaruk.com/mc/` (via Cloudflare Worker → nginx → serve)
+**Repo**: `openclaw-extensions/ui/mission-control/`
 
 ---
 
@@ -24,355 +11,246 @@ Mission Control UI will be a **real-time web dashboard** separate from OpenClaw'
 
 ```
 ┌─────────────────────────────────────────┐
-│  Mission Control UI (React + Vite)     │
-│  Port: 3001                             │
+│  Browser                                │
+│  React + Vite SPA                       │
 └──────────────┬──────────────────────────┘
-               │ WebSocket
+               │ HTTPS
                ▼
 ┌─────────────────────────────────────────┐
-│  WebSocket Server (Node.js)             │
-│  - SQLite DB connection                 │
-│  - Real-time event push                 │
+│  Cloudflare Worker (kamino-proxy)       │
+│  - Landing page at /                   │
+│  - Adds X-Kamino-Secret header         │
+│  - Proxies /mc/, /api/, /openclaw/     │
 └──────────────┬──────────────────────────┘
-               │ Read/Write
+               │ HTTP (with secret header)
                ▼
 ┌─────────────────────────────────────────┐
-│  SQLite Database                        │
-│  - tasks, messages, activities          │
-│  - agents, documents, notifications     │
-└─────────────────────────────────────────┘
-               ▲
-               │ Write events
-┌──────────────┴──────────────────────────┐
-│  OpenClaw Gateway + Hooks               │
-│  - Agents write to DB via hooks         │
-└─────────────────────────────────────────┘
+│  nginx (VPS port 80)                   │
+│  - Cloudflare IP allowlist             │
+│  - X-Kamino-Secret verification        │
+│  - /mc/ → serve :7891                  │
+│  - /api/ → Hono API :9347             │
+│  - /openclaw/ → Gateway :48991        │
+└──────┬────────────────┬─────────────────┘
+       ▼                ▼
+┌──────────────┐ ┌──────────────────────┐
+│  npx serve   │ │  Hono API Server     │
+│  :7891       │ │  :9347               │
+│  Static SPA  │ │  REST endpoints      │
+└──────────────┘ │  dotenv auth         │
+                 │  Reads OpenClaw data │
+                 └──────────────────────┘
 ```
 
 ---
 
-## Features
+## Authentication
 
-### 1. Activity Feed (Real-Time)
+### Two-Layer Auth
 
-Live stream of all agent actions:
+| Layer | Mechanism | Purpose |
+|-------|-----------|---------|
+| **nginx** | `X-Kamino-Secret` header | Blocks bots/scanners bypassing Cloudflare |
+| **API** | `?key=` or `X-API-Key` header | Authenticates UI requests |
 
+### Access Flow
+
+1. User visits `https://kamino.ömerfaruk.com/mc/?key=API_KEY`
+2. `api.ts` → `initApiKey()` reads `?key=` → stores in `localStorage` → cleans URL
+3. `AccessGuard.tsx` → calls `/api/auth/check` with stored key
+4. If valid → shows dashboard. If invalid → shows login form
+5. All subsequent API calls include `?key=` query param
+
+### API Key
+
+The API key is stored in `/root/openclaw-extensions/api/.env`:
 ```
-🔵 14:23  Admin posted comment on "Deploy VPS"
-🟢 14:21  Security completed code review
-🟡 14:18  Demo agent started task "Test sandbox"
-🔴 14:15  Intern agent blocked (waiting for approval)
+API_SECRET_KEY=kamino_mc_2def0d927d7fc5270bd24d33da454cf39
 ```
-
-**Data Source**: `activities` table (SQLite)
 
 ---
 
-### 2. Task Board (Kanban)
+## Pages
 
-Drag-and-drop task management:
+### Dashboard
+Summary cards showing agent count, active sessions, recent token usage, system health.
 
-```
-┌─────────────┬─────────────┬─────────────┬─────────────┬─────────────┐
-│   Inbox     │  Assigned   │ In Progress │   Review    │    Done     │
-├─────────────┼─────────────┼─────────────┼─────────────┼─────────────┤
-│ Task 1      │ Task 3      │ Task 5      │ Task 7      │ Task 9      │
-│ Task 2      │ Task 4      │ Task 6      │ Task 8      │ Task 10     │
-└─────────────┴─────────────┴─────────────┴─────────────┴─────────────┘
-```
+### Agents
+- **Agent cards** in a grid layout (ID, model, status, sessions, SOUL name)
+- **Agent Details** panel (opens above grid on click):
+  - Info cards: Model, Sessions, SOUL, Tools
+  - Action buttons: **View SOUL** → Memory Browser, **View Sessions** → Session Manager, **Browse Workspace** → Memory Browser
+- **Model dropdown**: 19 models across Anthropic (Claude 4.6/4.5/4/3.5), Google (Gemini 2.5/2.0), OpenAI (GPT-4.1/o4)
 
-**Features**:
-- Drag to change status
-- Click to view task details
-- Filter by agent
-- Search by keyword
+### Sessions
+- List of all active/recent sessions with user, agent, model, message count, token usage
+- `filterAgent` prop for cross-page filtering (from Agent Details → View Sessions)
+- Expandable message history per session
 
-**Data Source**: `tasks` table (SQLite)
+### Memory Browser
+- File tree from agent workspaces (`~/.openclaw/workspace-*/memory/`)
+- **Source filters**: Main Workspace, per-agent workspaces, hooks
+- 3-column layout: source sidebar, file list, content viewer
+- `initialPath` prop for cross-page navigation (from Agent Details → View SOUL)
 
----
+### Token Logs
+- Chronological log of all LLM interactions
+- Shows role (user/assistant), input/output/cache tokens, model, content preview
+- User messages included (even with 0 tokens)
 
-### 3. Agent Cards
+### Cron Tasks
+- List of scheduled cron jobs from `~/.openclaw/data/cron/`
+- Shows name, schedule (cron expression), target agent, message, timezone, status
 
-Real-time agent status:
+### Routing Config
+- Agent definitions from `openclaw.json` agents.list
+- Routing bindings: channel + peer → agent mapping
+- Add/remove bindings with channel, peer type (DM/Group), peer ID, target agent
 
-```
-┌────────────────────────────────────────┐
-│ 🤖 Admin Agent                         │
-│ Status: ● Active                       │
-│ Current: Reviewing deploy plan         │
-│ Last seen: 2 minutes ago               │
-│ Token usage: 12,405 today              │
-└────────────────────────────────────────┘
+### Contacts
+- Contact directory from `contacts.yaml`
+- Admin, trusted, blocked categories
 
-┌────────────────────────────────────────┐
-│ 🔒 Security Agent                      │
-│ Status: ⚪ Idle                        │
-│ Current: None                          │
-│ Last seen: 15 minutes ago              │
-│ Token usage: 8,192 today               │
-└────────────────────────────────────────┘
-```
+### Hooks
+- List of installed hooks from `~/.openclaw/hooks/`
+- Enable/disable toggle
 
-**Data Source**: `agents` table + heartbeat logs
+### Settings
+- Mission Control app settings (auto-refresh interval, etc.)
 
----
-
-### 4. Task Detail View
-
-Full task context with comment thread:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Task: Deploy VPS with Kamino Mode                           │
-│ Status: In Progress          Assigned: Admin, Security      │
-├─────────────────────────────────────────────────────────────┤
-│ Description:                                                │
-│ Set up VPS with original/kamino mode switching              │
-│                                                              │
-│ Created by: Admin on Feb 5, 2026 at 14:00                  │
-├─────────────────────────────────────────────────────────────┤
-│ 💬 Comments (3)                                             │
-│                                                              │
-│ Admin • 14:15                                               │
-│ Starting deployment. @security please review firewall rules │
-│                                                              │
-│ Security • 14:20                                            │
-│ UFW configured. SSH on port 2222, Gateway on 18789. ✅      │
-│                                                              │
-│ Admin • 14:23                                               │
-│ Perfect. Moving to test phase.                              │
-│                                                              │
-│ [Type a comment...]                         [@mention ▼]   │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Features**:
-- Threaded comments
-- @mention autocomplete
-- Markdown support
-- Attach documents
-
----
-
-### 5. Document Panel
-
-Searchable document library:
-
-```
-┌─────────────────────────────────────────┐
-│ 📄 Documents                            │
-├─────────────────────────────────────────┤
-│ 🔍 Search...                            │
-├─────────────────────────────────────────┤
-│ 📊 Security Audit Report (Security)     │
-│ 📝 VPS Setup Notes (Admin)              │
-│ 🎨 UI Mockup (Design, future)           │
-│ 📋 Daily Standup - Feb 5 (Auto)         │
-└─────────────────────────────────────────┘
-```
-
-**Data Source**: `documents` table
-
----
-
-## Data Model (SQLite Schema)
-
-```sql
-CREATE TABLE agents (
-  id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL,              -- "admin", "security", etc.
-  display_name TEXT,                -- "Admin Agent"
-  role TEXT,                        -- "Squad Lead"
-  status TEXT DEFAULT 'idle',       -- idle | active | blocked
-  current_task_id INTEGER,          -- FK to tasks
-  session_key TEXT,                 -- "agent:admin:main"
-  last_seen DATETIME,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE tasks (
-  id INTEGER PRIMARY KEY,
-  title TEXT NOT NULL,
-  description TEXT,
-  status TEXT DEFAULT 'inbox',      -- inbox | assigned | in_progress | review | done | blocked
-  priority INTEGER DEFAULT 0,
-  created_by INTEGER,                -- FK to agents
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME
-);
-
-CREATE TABLE task_assignments (
-  task_id INTEGER,                   -- FK to tasks
-  agent_id INTEGER,                  -- FK to agents
-  PRIMARY KEY (task_id, agent_id)
-);
-
-CREATE TABLE messages (
-  id INTEGER PRIMARY KEY,
-  task_id INTEGER,                   -- FK to tasks
-  from_agent_id INTEGER,             -- FK to agents
-  content TEXT NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE documents (
-  id INTEGER PRIMARY KEY,
-  title TEXT NOT NULL,
-  content TEXT,                      -- Markdown
-  type TEXT,                         -- deliverable | research | protocol
-  task_id INTEGER,                    -- Optional FK to tasks
-  created_by INTEGER,                 -- FK to agents
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE activities (
-  id INTEGER PRIMARY KEY,
-  type TEXT NOT NULL,                -- task_created | message_sent | status_changed
-  agent_id INTEGER,                  -- FK to agents
-  task_id INTEGER,                    -- Optional FK to tasks
-  message TEXT,                      -- Human-readable description
-  metadata TEXT,                     -- JSON for extra data
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE notifications (
-  id INTEGER PRIMARY KEY,
-  mentioned_agent_id INTEGER,        -- FK to agents
-  from_agent_id INTEGER,             -- FK to agents
-  task_id INTEGER,                    -- FK to tasks
-  content TEXT,
-  delivered BOOLEAN DEFAULT 0,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
+### Security
+- Security event log from `security.jsonl`
 
 ---
 
 ## Technology Stack
 
-### Frontend
-- **React 18** with TypeScript
-- **Vite** for dev server and build
-- **TailwindCSS** for styling
-- **Radix UI** for accessible components
-- **React Query** for data fetching
-- **Socket.io-client** for WebSocket
-
-### Backend
-- **Node.js + Express**
-- **Socket.io** for WebSocket server
-- **better-sqlite3** for SQLite
-- **TypeScript**
-
-### Deployment
-- Frontend: Static build served by Nginx
-- Backend: PM2 process manager
-- Database: SQLite file (`~/.openclaw/mission-control.db`)
+| Component | Technology |
+|-----------|------------|
+| Frontend | React 18 + TypeScript + Vite |
+| Styling | Vanilla CSS (kamino design system) |
+| Icons | lucide-react |
+| API Server | Hono (Node.js) |
+| Static Server | npx serve |
+| Reverse Proxy | nginx |
+| CDN/Proxy | Cloudflare Workers |
+| Auth | API key via query param / localStorage |
 
 ---
 
-## Implementation Plan (Phase 2)
+## API Endpoints
 
-### Step 1: Database Setup (2 hours)
-- Create SQLite schema
-- Write migration script
-- Create seed data (4 agents)
+All endpoints require `?key=API_KEY` or `X-API-Key` header.
 
-### Step 2: Backend API (4 hours)
-- Express server with REST endpoints
-- WebSocket server for real-time updates
-- SQLite query functions
+### Core
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check (no auth) |
+| `/api/auth/check` | GET | Validate API key |
 
-### Step 3: Frontend UI (8 hours)
-- Activity feed component
-- Task board (Kanban)
-- Agent cards
-- Task detail view
-- Document panel
+### Data
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/dashboard` | GET | Dashboard summary stats |
+| `/api/agents` | GET | Agent list + available models |
+| `/api/agents/:id/model` | PUT | Change agent model |
+| `/api/sessions` | GET | Session list |
+| `/api/sessions/:id` | GET | Session messages |
+| `/api/memory` | GET | Memory files (all agents) |
+| `/api/memory/file` | GET | Read a specific file |
+| `/api/logs/tokens` | GET | Token usage logs |
+| `/api/cron/jobs` | GET | Cron job list |
+| `/api/contacts` | GET | Contact directory |
+| `/api/hooks` | GET | Hook list |
 
-### Step 4: Integration (3 hours)
-- Update hooks to write to SQLite
-- WebSocket event broadcasting
-- Authentication (admin-only access)
-
-### Step 5: Deployment (2 hours)
-- Build frontend
-- Configure Nginx
-- PM2 setup for backend
-- UFW firewall rule for port 3001
-
-**Total**: ~19 hours
-
----
-
-## Current Workaround (MVP)
-
-While Mission Control UI is in Phase 2, use:
-
-1. **Daily Standup Hook**: Automated summaries via WhatsApp
-2. **JSONL Logs**: View with `jq`:
-   ```bash
-   # Activity feed
-   tail -f ~/.openclaw/logs/security.jsonl | jq
-   
-   # Token usage
-   jq -r 'select(.agent=="admin") | "\(.timestamp | split("T")[1][:5]) - \(.input_tokens + .output_tokens) tokens"' \
-     ~/.openclaw/logs/billing.jsonl
-   ```
-3. **WORKING.md Files**: Check agent status:
-   ```bash
-   cat ~/.openclaw-kamino/workspaces/admin/memory/WORKING.md
-   ```
+### Config
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/routing` | GET | Routing config (agents + bindings) |
+| `/api/routing/agents` | PUT | Update agent list |
+| `/api/routing/bindings` | PUT | Update bindings |
+| `/api/routing/settings` | GET/PUT | MC settings |
 
 ---
 
-## API Endpoints (Future)
+## Deployment
 
-### Tasks
-- `GET /api/tasks` - List all tasks
-- `GET /api/tasks/:id` - Get task details
-- `POST /api/tasks` - Create task
-- `PATCH /api/tasks/:id` - Update task (status, assign, etc.)
-- `DELETE /api/tasks/:id` - Delete task
+### Build & Deploy
 
-### Messages
-- `GET /api/tasks/:id/messages` - Get comments for task
-- `POST /api/tasks/:id/messages` - Post comment
+```bash
+# 1. Build UI (local)
+cd openclaw-extensions/ui/mission-control
+npm run build
 
-### Agents
-- `GET /api/agents` - List all agents
-- `GET /api/agents/:id` - Get agent details
-- `PATCH /api/agents/:id` - Update agent status
+# 2. Deploy to VPS
+scp -i ~/.ssh/id_rsa_openclaw dist/* root@VPS:/root/openclaw-extensions/ui/mission-control/dist/
+scp -i ~/.ssh/id_rsa_openclaw dist/assets/* root@VPS:/root/openclaw-extensions/ui/mission-control/dist/assets/
 
-### Activities
-- `GET /api/activities` - Get activity feed (paginated)
+# 3. Deploy API changes
+scp -i ~/.ssh/id_rsa_openclaw api/server.ts root@VPS:/root/openclaw-extensions/api/server.ts
+ssh root@VPS "bash /root/restart-api.sh"
 
-### Documents
-- `GET /api/documents` - List documents
-- `POST /api/documents` - Create document
+# 4. Deploy nginx config
+scp -i ~/.ssh/id_rsa_openclaw kamino-proxy/nginx-kamino.conf root@VPS:/etc/nginx/sites-available/kamino.conf
+ssh root@VPS "nginx -t && nginx -s reload"
 
-### WebSocket Events
-- `activity:new` - New activity item
-- `task:updated` - Task changed
-- `message:new` - New comment
-- `agent:status` - Agent status changed
+# 5. Deploy Worker (Cloudflare)
+cd kamino-proxy && npx wrangler deploy
+```
+
+### VPS Processes
+
+| Process | Port | Command | Serves |
+|---------|------|---------|--------|
+| `serve` | 7891 | `npx serve -s . -l 7891` | UI static files |
+| Hono API | 9347 | `npx tsx api/index.ts` | REST API |
+| nginx | 80 | system service | Reverse proxy |
+| OpenClaw | 18789 | `openclaw-gateway` | Gateway |
+
+### Restart Commands
+
+```bash
+# API restart
+bash /root/restart-api.sh
+
+# nginx reload
+nginx -t && nginx -s reload
+
+# UI serve (auto-serves new files, no restart needed)
+```
 
 ---
 
-## Security
+## Cross-Page Navigation
 
-- Admin-only access (check `contacts.yaml`)
-- JWT authentication
-- HTTPS required (Let's Encrypt)
-- CORS restricted to VPS IP
-- Rate limiting on API endpoints
+The `NavState` interface enables deep linking between pages:
+
+```typescript
+interface NavState {
+    filterAgent?: string   // Filter sessions/logs by agent ID
+    openFilePath?: string  // Open a specific file in Memory Browser
+}
+```
+
+### Navigation Flows
+- **Agent Details → View SOUL**: Opens Memory Browser with `openFilePath` to agent's SOUL.md
+- **Agent Details → View Sessions**: Opens Session Manager with `filterAgent` to show only that agent's sessions
+- **Agent Details → Browse Workspace**: Opens Memory Browser with `openFilePath` to agent's workspace
 
 ---
 
-## Next Steps
+## Security Layers
 
-1. **Phase 1 (Now)**: Complete hook-based system, JSONL logs
-2. **Phase 2 (Future)**: Build Mission Control UI with SQLite + WebSocket
-3. **Phase 3 (Later)**: Mobile app, Telegram bot integration
+```
+Internet → Cloudflare (DDoS, WAF)
+        → Worker (adds X-Kamino-Secret)
+        → nginx (IP allowlist + secret check)
+        → API (API key validation)
+        → UI (AccessGuard → localStorage key)
+```
 
-**Question for user**: Should Mission Control UI be prioritized sooner, or stick with JSONL logs for MVP?
+### X-Kamino-Secret
+- Worker adds `X-Kamino-Secret: k4m1n0-...` to every proxied request
+- nginx verifies at server level — returns 403 if missing/invalid
+- Localhost (127.0.0.1) exempted for health checks
+- Prevents direct VPS access from bots that bypass Cloudflare

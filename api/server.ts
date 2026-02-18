@@ -41,6 +41,9 @@ app.use('/api/*', async (c, next) => {
 // Health check (no auth required)
 app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
 
+// Auth check (behind /api/* middleware — used by AccessGuard)
+app.get('/api/auth/check', (c) => c.json({ authenticated: true }))
+
 // API routes
 app.route('/api/dashboard', dashboardRoutes)
 app.route('/api/costs', costRoutes)

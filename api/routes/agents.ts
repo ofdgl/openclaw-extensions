@@ -6,14 +6,31 @@ const app = new Hono()
 
 // Available models for selection
 const AVAILABLE_MODELS = [
+    // Anthropic — Claude 4.6 (latest)
+    { id: 'anthropic/claude-opus-4-6', name: 'Claude Opus 4.6', provider: 'anthropic' },
+    { id: 'anthropic/claude-sonnet-4-6', name: 'Claude Sonnet 4.6', provider: 'anthropic' },
+    { id: 'anthropic/claude-haiku-4-6', name: 'Claude Haiku 4.6', provider: 'anthropic' },
+    // Anthropic — Claude 4.5
+    { id: 'anthropic/claude-opus-4-5', name: 'Claude Opus 4.5', provider: 'anthropic' },
     { id: 'anthropic/claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5', provider: 'anthropic' },
-    { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', provider: 'anthropic' },
-    { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', provider: 'anthropic' },
-    { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', provider: 'anthropic' },
+    { id: 'anthropic/claude-haiku-4-5', name: 'Claude Haiku 4.5', provider: 'anthropic' },
+    // Anthropic — Claude 4
     { id: 'anthropic/claude-opus-4-20250514', name: 'Claude Opus 4', provider: 'anthropic' },
+    { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', provider: 'anthropic' },
+    // Anthropic — Claude 3.5 (legacy)
+    { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', provider: 'anthropic' },
+    { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', provider: 'anthropic' },
+    // Google
     { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'google' },
     { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash', provider: 'google' },
+    { id: 'google/gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', provider: 'google' },
+    { id: 'google/gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'google' },
+    // OpenAI
+    { id: 'openai/gpt-4.1', name: 'GPT-4.1', provider: 'openai' },
+    { id: 'openai/gpt-4.1-mini', name: 'GPT-4.1 Mini', provider: 'openai' },
+    { id: 'openai/gpt-4.1-nano', name: 'GPT-4.1 Nano', provider: 'openai' },
     { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'openai' },
+    { id: 'openai/o4-mini', name: 'o4-mini', provider: 'openai' },
 ]
 
 // GET /api/agents - List all agents with status

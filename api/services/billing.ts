@@ -191,18 +191,15 @@ export async function parseBillingLogs(limit = 1000): Promise<BillingEntry[]> {
                             if (d.type !== 'message') continue
 
                             const role = d.message?.role || ''
-                            const usage = d.usage || d.message?.usage || d.costTracker || {}
+                            const usage = d.usage || d.message?.usage || d.costTracker || d.tokenUsage || d.metadata?.usage || {}
 
-                            const inputTokens = usage.input_tokens || usage.prompt_tokens || 0
-                            const outputTokens = usage.output_tokens || usage.completion_tokens || 0
-                            const cacheRead = usage.cache_read_input_tokens || usage.cachedTokens || 0
-                            const cacheCreation = usage.cache_creation_input_tokens || 0
+                            const inputTokens = usage.input_tokens || usage.prompt_tokens || usage.inputTokens || 0
+                            const outputTokens = usage.output_tokens || usage.completion_tokens || usage.outputTokens || 0
+                            const cacheRead = usage.cache_read_input_tokens || usage.cachedTokens || usage.cacheReadTokens || 0
+                            const cacheCreation = usage.cache_creation_input_tokens || usage.cacheCreationTokens || 0
                             const totalTokens = inputTokens + outputTokens
 
-                            // Only include entries that actually have token data
-                            if (totalTokens === 0 && role === 'user') continue
-
-                            const cost = role === 'assistant' ? calculateCost(sessionModel, inputTokens, outputTokens, cacheRead, cacheCreation) : 0
+                            const cost = (role === 'assistant' && totalTokens > 0) ? calculateCost(sessionModel, inputTokens, outputTokens, cacheRead, cacheCreation) : 0
 
                             // Extract message text content
                             const msgContent = d.message?.content
