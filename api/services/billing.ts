@@ -191,15 +191,25 @@ export async function parseBillingLogs(limit = 1000): Promise<BillingEntry[]> {
                             if (d.type !== 'message') continue
 
                             const role = d.message?.role || ''
-                            const usage = d.usage || d.message?.usage || d.costTracker || d.tokenUsage || d.metadata?.usage || {}
+                            const usage = d.message?.usage || d.usage || d.costTracker || d.tokenUsage || d.metadata?.usage || {}
 
-                            const inputTokens = usage.input_tokens || usage.prompt_tokens || usage.inputTokens || 0
-                            const outputTokens = usage.output_tokens || usage.completion_tokens || usage.outputTokens || 0
-                            const cacheRead = usage.cache_read_input_tokens || usage.cachedTokens || usage.cacheReadTokens || 0
-                            const cacheCreation = usage.cache_creation_input_tokens || usage.cacheCreationTokens || 0
-                            const totalTokens = inputTokens + outputTokens
+                            // OpenClaw JSONL uses short camelCase names: input, output, cacheRead, cacheWrite
+                            // Also support Anthropic/OpenAI raw API names as fallback
+                            const inputTokens = usage.input || usage.input_tokens || usage.prompt_tokens || usage.inputTokens || 0
+                            const outputTokens = usage.output || usage.output_tokens || usage.completion_tokens || usage.outputTokens || 0
+                            const cacheRead = usage.cacheRead || usage.cache_read_input_tokens || usage.cachedTokens || usage.cacheReadTokens || 0
+                            const cacheCreation = usage.cacheWrite || usage.cache_creation_input_tokens || usage.cacheCreationTokens || 0
+                            const totalTokens = usage.totalTokens || (inputTokens + outputTokens)
 
-                            const cost = (role === 'assistant' && totalTokens > 0) ? calculateCost(sessionModel, inputTokens, outputTokens, cacheRead, cacheCreation) : 0
+                            // Use OpenClaw's pre-calculated cost when available, otherwise calculate
+                            let cost = 0
+                            if (role === 'assistant' && totalTokens > 0) {
+                                if (usage.cost?.total && usage.cost.total > 0) {
+                                    cost = usage.cost.total
+                                } else {
+                                    cost = calculateCost(sessionModel, inputTokens, outputTokens, cacheRead, cacheCreation)
+                                }
+                            }
 
                             // Extract message text content
                             const msgContent = d.message?.content
@@ -213,8 +223,16 @@ export async function parseBillingLogs(limit = 1000): Promise<BillingEntry[]> {
                                 textContent = msgContent
                             }
 
+                            // Handle timestamp: OpenClaw uses epoch ms, convert to ISO
+                            let timestamp: string
+                            if (typeof d.timestamp === 'number') {
+                                timestamp = new Date(d.timestamp).toISOString()
+                            } else {
+                                timestamp = d.timestamp || new Date().toISOString()
+                            }
+
                             entries.push({
-                                timestamp: d.timestamp || new Date().toISOString(),
+                                timestamp,
                                 user: senderName,
                                 phone: senderId,
                                 model: sessionModel,
